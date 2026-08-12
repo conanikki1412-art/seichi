@@ -82,8 +82,10 @@
   #styleBtn{bottom:78px;font-size:18px;}
 
   /* ピン */
-  .pin{position:relative;width:30px;height:38px;cursor:pointer;}
+  .pin{width:30px;height:38px;cursor:pointer;line-height:0;}
   .pin svg{width:30px;height:38px;display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));}
+  /* MapLibre のマーカー配置を必ず優先させる（CDNのCSSが遅延・失敗しても崩れないように） */
+  .maplibregl-marker{position:absolute!important;top:0!important;left:0!important;will-change:transform;}
 
   /* ---------- 追加モードのバナー ---------- */
   #addBanner{
@@ -534,8 +536,9 @@ function renderMarkers(){
   spots.forEach(function(s){
     var el = pinEl(s.visited);
     el.addEventListener("click", function(ev){ ev.stopPropagation(); openSheet(s.id); });
-    markers[s.id] = new maplibregl.Marker({ element: el, anchor:"bottom" })
-      .setLngLat([s.lng, s.lat]).addTo(map);
+    markers[s.id] = new maplibregl.Marker({
+        element: el, anchor:"bottom", subpixelPositioning: true
+      }).setLngLat([s.lng, s.lat]).addTo(map);
   });
 }
 function flyTo(lat, lng, zoom){
