@@ -457,6 +457,9 @@
    共有サーバー（Supabase）の設定
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
+/* 更新のたびにこの日付を変えると、端末が古い版を掴んでいても自動で読み直します */
+var APP_VERSION = "2026-08-13-a";
+
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
 </script>
@@ -1516,6 +1519,33 @@ if(hasServer()){
 }
 
 window.addEventListener("resize", function(){ if(map) map.resize(); });
+
+/* ================= 自動更新チェック =================
+   サーバー上のファイルを毎回キャッシュ無視で読み、
+   APP_VERSION が変わっていたら一度だけ読み直す */
+function checkUpdate(){
+  if(typeof fetch !== "function") return;
+  var here = location.pathname;
+  fetch(here + "?_=" + Date.now(), { cache:"no-store" })
+    .then(function(r){ return r.ok ? r.text() : ""; })
+    .then(function(t){
+      var m = t.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+      if(!m || m[1] === APP_VERSION) return;
+      try{
+        if(sessionStorage.getItem("seichi-reloaded") === m[1]) return;
+        sessionStorage.setItem("seichi-reloaded", m[1]);
+      }catch(e){}
+      toast("新しいバージョンに更新します");
+      setTimeout(function(){
+        location.replace(here + "?v=" + encodeURIComponent(m[1]));
+      }, 900);
+    })
+    .catch(function(){});
+}
+checkUpdate();
+document.addEventListener("visibilitychange", function(){
+  if(!document.hidden) checkUpdate();
+});
 
 })();
 </script>
