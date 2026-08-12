@@ -339,6 +339,9 @@
           <div><div>共有サーバー</div><small id="sbState">確認中…</small></div>
           <div class="go" id="btnReload">再読込</div>
         </div>
+        <div class="set-item" id="btnAdmin">
+          <div><div>管理キー</div><small id="adminState">未設定</small></div><div class="go">入力</div>
+        </div>
       </div>
       <div class="set-sec">
         <div class="set-item" id="btnExport">
@@ -404,7 +407,7 @@
           <input type="text" id="fAuthor" placeholder="ニックネーム">
         </div>
         <div class="field" id="fPhotoField">
-          <label>写真</label>
+          <label id="fPhotoLabel">写真</label>
           <div class="photo-grid" id="fPhotos"></div>
           <input type="file" id="fPhotoInput" accept="image/*" multiple hidden>
         </div>
@@ -467,7 +470,10 @@ var KEY_STYLE = "conan-seichi-style";
 var KEY_MODE  = "conan-seichi-mode";
 var KEY_NICK  = "conan-seichi-nick";
 var KEY_TOKEN = "conan-seichi-tokens";
-var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author";
+var KEY_ADMIN = "conan-seichi-admin";
+var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author,photos";
+var SHARED_PHOTO_MAX = 3;   // 共有モードの写真枚数の上限
+var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
 
 function rasterStyle(tiles, attribution, maxzoom){
   return {
@@ -495,6 +501,8 @@ var personal = [];
 var shared   = [];
 var myTokens = {};
 var nickname = localStorage.getItem(KEY_NICK) || "";
+var adminKey = localStorage.getItem(KEY_ADMIN) || "";
+var moveTarget = null;
 var MODE     = localStorage.getItem(KEY_MODE) || "shared";
 var styleKey = localStorage.getItem(KEY_STYLE) || STYLES[0].id;
 var filter   = "all";
@@ -570,6 +578,39 @@ function sbInsert(row, cb){
     .then(function(r){ cb(r.ok, r.status); })
     .catch(function(){ cb(false, 0); });
 }
+/* 画像をStorageにアップロードして公開URLを返す */
+function dataUrlToBlob(d){
+  var parts = String(d).split(","), bin = atob(parts[1]);
+  var u8 = new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], { type:"image/jpeg" });
+}
+function sbUpload(dataUrl, cb){
+  var blob;
+  try{ blob = dataUrlToBlob(dataUrl); }catch(e){ cb(null); return; }
+  var path = uid() + Math.random().toString(36).slice(2,8) + ".jpg";
+  var h = sbHeaders();
+  h["Content-Type"] = "image/jpeg";
+  fetch(sbBase() + "/storage/v1/object/spot-photos/" + path, { method:"POST", headers:h, body:blob })
+    .then(function(r){ cb(r.ok ? sbBase() + "/storage/v1/object/public/spot-photos/" + path : null); })
+    .catch(function(){ cb(null); });
+}
+function sbUploadAll(list, cb){
+  var out = [], i = 0;
+  (function next(){
+    if(i >= list.length){ cb(out); return; }
+    sbUpload(list[i++], function(url){ if(url) out.push(url); next(); });
+  })();
+}
+
+function sbUpdatePos(id, token, lat, lng, cb){
+  fetch(sbBase() + "/rest/v1/rpc/update_spot_position",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_id:id, p_token:token, p_lat:lat, p_lng:lng }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
 function sbDelete(id, token, cb){
   fetch(sbBase() + "/rest/v1/rpc/delete_spot",
         { method:"POST", headers: sbHeaders(), body: JSON.stringify({ p_id:id, p_token:token }) })
@@ -630,6 +671,10 @@ function pinEl(kind){
     + '<circle cx="16" cy="14.5" r="5" fill="'+dot+'"/></svg>';
   return el;
 }
+/* 共有スポットを編集できるか（自分が登録した／管理キーを持っている） */
+function sharedToken(id){ return myTokens[id] || adminKey || ""; }
+function canEditShared(id){ return !!(myTokens[id] || adminKey); }
+
 function alreadyCopied(sharedId){
   return personal.some(function(p){ return p.fromShared === sharedId; });
 }
@@ -701,7 +746,7 @@ function openSheet(id){
   var s = findSpot(id);
   if(!s) return;
   var isShared = MODE === "shared";
-  var photos = (!isShared && s.photos) ? s.photos : [];
+  var photos = Array.isArray(s.photos) ? s.photos : [];
   var h = "";
 
   if(photos.length){
@@ -742,11 +787,15 @@ function openSheet(id){
     h += alreadyCopied(s.id)
       ? '<button class="act-edit" id="sOpenPersonal">自分の記録で開く</button>'
       : '<button class="act-main" id="sCopy">自分の記録に追加</button>';
-    if(myTokens[s.id]) h += '<button class="act-del" id="sDelShared">🗑</button>';
+    if(canEditShared(s.id)){
+      h += '<button class="act-edit" id="sMove">位置を微調整</button>';
+      h += '<button class="act-del" id="sDelShared">🗑</button>';
+    }
   }else{
     h += '<button class="'+(s.visited?'act-unvisit':'act-visit')+'" id="sVisit">'
        + (s.visited?'未訪問に戻す':'訪問済みにする')+'</button>';
     h += '<button class="act-edit" id="sEdit">編集</button>';
+    h += '<button class="act-edit" id="sMove">位置を微調整</button>';
     h += '<button class="act-del" id="sDel">🗑</button>';
     if(!s.fromShared) h += '<button class="act-edit" id="sShare">みんなの聖地にも登録</button>';
   }
@@ -756,6 +805,9 @@ function openSheet(id){
   sheet.style.display = "flex";
   sheetMask.style.display = "block";
   document.getElementById("sClose").onclick = closeSheet;
+
+  var mv = document.getElementById("sMove");
+  if(mv) mv.onclick = function(){ startMove(s); };
 
   if(isShared){
     var cp = document.getElementById("sCopy");
@@ -820,10 +872,13 @@ function shareExisting(s){
   if(!confirm("「"+s.name+"」をみんなの聖地に登録します。名前・作品・住所・メモが全員に公開されます。よろしいですか？")) return;
   askNickname(function(nick){
     var token = randToken();
+    var pics = (s.photos || []).filter(function(p){ return /^data:/.test(p); }).slice(0, SHARED_PHOTO_MAX);
+    toast(pics.length ? "写真を送信中…" : "登録中…");
+    sbUploadAll(pics, function(urls){
     sbInsert({
       name: s.name.slice(0,80), work: (s.work||"").slice(0,120), addr: (s.addr||"").slice(0,200),
       memo: (s.memo||"").slice(0,1000), lat: s.lat, lng: s.lng,
-      author: nick.slice(0,40), edit_token: token
+      author: nick.slice(0,40), edit_token: token, photos: urls
     }, function(ok){
       if(!ok){ toast("登録できませんでした"); return; }
       toast("みんなの聖地に登録しました");
@@ -834,6 +889,7 @@ function shareExisting(s){
         if(mine){ myTokens[mine.id] = token; saveTokens(); }
         renderMarkers(); renderList();
       });
+    });
     });
   });
 }
@@ -989,6 +1045,39 @@ function chrome(){
   modeBar.style.display = pickMode ? "none" : "flex";
   if(map) setTimeout(function(){ map.resize(); }, 60);
 }
+/* ピンの位置を微調整するモード */
+function startMove(s){
+  if(!map){ toast("地図の準備ができていません"); return; }
+  moveTarget = { id:s.id, mode:MODE, name:s.name };
+  startPick("move", "拡大して、ピン先を正確な位置に合わせてください");
+  map.jumpTo({ center:[s.lng, s.lat], zoom: Math.max(map.getZoom(), 18) });
+  document.getElementById("addNext").textContent = "この位置に決定";
+}
+function finishMove(lat, lng){
+  var t = moveTarget; moveTarget = null;
+  document.getElementById("addNext").textContent = "ここに登録";
+  if(!t) return;
+  if(t.mode === "personal"){
+    personal = personal.map(function(p){
+      if(p.id === t.id){ p.lat = lat; p.lng = lng; }
+      return p;
+    });
+    saveLocal(); renderMarkers();
+    toast("位置を更新しました");
+    setTimeout(function(){ openSheet(t.id); }, 200);
+  }else{
+    toast("更新中…");
+    sbUpdatePos(t.id, sharedToken(t.id), lat, lng, function(ok){
+      if(!ok){ toast("更新できませんでした（権限がない可能性があります）"); return; }
+      sbLoad(function(){
+        renderMarkers(); renderList();
+        toast("位置を更新しました");
+        setTimeout(function(){ openSheet(t.id); }, 200);
+      });
+    });
+  }
+}
+
 function startPick(mode, text){
   if(!map){ toast("地図の準備ができていません"); return; }
   pickMode = true; pickReturn = mode;
@@ -1022,7 +1111,15 @@ document.getElementById("addBtn").addEventListener("click", function(){
 });
 document.getElementById("addCancel").addEventListener("click", function(){
   var back = pickReturn;
+  var t = moveTarget;
   endPick();
+  if(back === "move"){
+    moveTarget = null;
+    document.getElementById("addNext").textContent = "ここに登録";
+    chrome();
+    if(t) setTimeout(function(){ openSheet(t.id); }, 150);
+    return;
+  }
   if(back === "form") formPage.style.display = "flex";
   chrome();
 });
@@ -1030,6 +1127,11 @@ document.getElementById("addNext").addEventListener("click", function(){
   var c = map.getCenter();
   var back = pickReturn;
   endPick();
+  if(back === "move"){
+    chrome();
+    finishMove(c.lat, c.lng);
+    return;
+  }
   if(back === "form"){
     draft.lat = c.lat; draft.lng = c.lng;
     document.getElementById("fCoord").textContent = c.lat.toFixed(5)+", "+c.lng.toFixed(5);
@@ -1058,7 +1160,10 @@ function setDest(d){
   document.getElementById("destPersonal").classList.toggle("on", d==="personal");
   var isShared = d === "shared";
   document.getElementById("fAuthorField").style.display = isShared ? "block" : "none";
-  document.getElementById("fPhotoField").style.display  = isShared ? "none" : "block";
+  document.getElementById("fPhotoField").style.display  = "block";
+  document.getElementById("fPhotoLabel").textContent =
+    isShared ? "写真（" + SHARED_PHOTO_MAX + "枚まで・全員に公開されます）"
+             : "写真（" + PERSONAL_PHOTO_MAX + "枚まで）";
   document.getElementById("fVisitField").style.display  = isShared ? "none" : "block";
   document.getElementById("fDateField").style.display   = (!isShared && draft && draft.visited) ? "block" : "none";
   document.getElementById("fMemoLabel").textContent = isShared ? "メモ（どのシーンの場所か）" : "メモ・感想";
@@ -1137,13 +1242,22 @@ document.getElementById("fSave").addEventListener("click", function(){
     updateNickState();
     var token = randToken();
     var lat = draft.lat, lng = draft.lng;
-    document.getElementById("fSave").textContent = "保存中…";
+    var pics = draft.photos.slice(0, SHARED_PHOTO_MAX);
+    var saveBtn = document.getElementById("fSave");
+    saveBtn.textContent = pics.length ? "写真を送信中…" : "保存中…";
+    sbUploadAll(pics, function(urls){
+    if(pics.length && !urls.length){
+      saveBtn.textContent = "保存";
+      toast("写真をアップロードできませんでした");
+      return;
+    }
+    saveBtn.textContent = "保存中…";
     sbInsert({
       name: name.slice(0,80), work: fWork.value.trim().slice(0,120),
       addr: fAddr.value.trim().slice(0,200), memo: fMemo.value.trim().slice(0,1000),
-      lat: lat, lng: lng, author: nickname, edit_token: token
+      lat: lat, lng: lng, author: nickname, edit_token: token, photos: urls
     }, function(ok){
-      document.getElementById("fSave").textContent = "保存";
+      saveBtn.textContent = "保存";
       if(!ok){ toast("登録できませんでした。通信状況をご確認ください"); return; }
       formPage.style.display = "none";
       draft = null; editingId = null;
@@ -1159,6 +1273,7 @@ document.getElementById("fSave").addEventListener("click", function(){
         showPage("mapPage");
         if(mine) setTimeout(function(){ openSheet(mine.id); }, 250);
       });
+    });
     });
     return;
   }
@@ -1185,12 +1300,14 @@ document.getElementById("fSave").addEventListener("click", function(){
   setTimeout(function(){ openSheet(savedId); }, 250);
 });
 
+function photoMax(){ return dest === "shared" ? SHARED_PHOTO_MAX : PERSONAL_PHOTO_MAX; }
 function renderFormPhotos(){
   if(!draft) return;
+  if(draft.photos.length > photoMax()) draft.photos = draft.photos.slice(0, photoMax());
   var h = draft.photos.map(function(p,i){
     return '<div class="ph"><img src="'+p+'"><button data-i="'+i+'">×</button></div>';
   }).join("");
-  if(draft.photos.length < 6){
+  if(draft.photos.length < photoMax()){
     h += '<button class="photo-add" id="phAdd"><span style="font-size:20px;">＋</span>写真</button>';
   }
   fPhotosEl.innerHTML = h;
@@ -1203,7 +1320,8 @@ function renderFormPhotos(){
 fPhotoInput.addEventListener("change", function(e){
   var files = Array.prototype.slice.call(e.target.files || []);
   if(!files.length) return;
-  files = files.slice(0, 6 - draft.photos.length);
+  files = files.slice(0, photoMax() - draft.photos.length);
+  if(!files.length){ toast("写真は"+photoMax()+"枚までです"); fPhotoInput.value=""; return; }
   var done = 0;
   toast("写真を処理中…");
   files.forEach(function(f){
@@ -1284,13 +1402,15 @@ function renderList(){
   cardsEl.innerHTML = arr.map(function(s){
     var th, badge, sub;
     if(MODE === "shared"){
-      th = '<div class="thumb ph">📍</div>';
+      th = (s.photos && s.photos[0])
+        ? '<img class="thumb" loading="lazy" src="'+s.photos[0]+'">'
+        : '<div class="thumb ph">📍</div>';
       badge = alreadyCopied(s.id)
         ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ 追加済み</span>'
         : '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author||"名無し")+'</span>';
       sub = s.work || s.addr || "作品未設定";
     }else{
-      th = (s.photos && s.photos[0]) ? '<img class="thumb" src="'+s.photos[0]+'">' : '<div class="thumb ph">📍</div>';
+      th = (s.photos && s.photos[0]) ? '<img class="thumb" loading="lazy" src="'+s.photos[0]+'">' : '<div class="thumb ph">📍</div>';
       badge = s.visited
         ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ 訪問済み'+(s.date? ' '+esc(s.date.replace(/-/g,"/")) : '')+'</span>'
         : '<span class="b" style="background:#f1f1f4;color:#8a8a95;">未訪問</span>';
@@ -1317,6 +1437,21 @@ document.getElementById("btnNick").addEventListener("click", function(){
   nickname = (n || "").trim().slice(0,40);
   localStorage.setItem(KEY_NICK, nickname);
   updateNickState();
+});
+function updateAdminState(){
+  var el = document.getElementById("adminState");
+  if(el) el.textContent = adminKey
+    ? "設定済み（すべての共有ピンを調整・削除できます）"
+    : "未設定（自分が登録したピンのみ調整できます）";
+}
+document.getElementById("btnAdmin").addEventListener("click", function(){
+  var k = prompt("管理キーを入力（空にすると解除）", adminKey || "");
+  if(k === null) return;
+  adminKey = (k || "").trim();
+  localStorage.setItem(KEY_ADMIN, adminKey);
+  updateAdminState();
+  closeSheet(); renderMarkers();
+  toast(adminKey ? "管理キーを設定しました" : "管理キーを解除しました");
 });
 document.getElementById("btnReload").addEventListener("click", function(){
   if(!hasServer()){ toast("共有サーバーが未設定です"); return; }
@@ -1367,6 +1502,7 @@ document.getElementById("btnReset").addEventListener("click", function(){
 /* ================= 起動 ================= */
 loadLocal();
 updateNickState();
+updateAdminState();
 renderStyleSheet();
 initMap();
 if(!hasServer() && MODE === "shared") MODE = "personal";
