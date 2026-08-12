@@ -454,8 +454,8 @@
    共有サーバー（Supabase）の設定
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
-var SUPABASE_URL      = "";
-var SUPABASE_ANON_KEY = "";
+var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
+var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
 </script>
 <script>
 (function(){
@@ -534,15 +534,20 @@ function toast(msg){
 }
 
 /* ================= 共有サーバー ================= */
+function sbBase(){
+  // 末尾の "/" や "/rest/v1" を貼り付けてしまっても動くようにする
+  return String(SUPABASE_URL).replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
+}
 function sbHeaders(extra){
-  var h = { "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-            "Content-Type": "application/json" };
+  var h = { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" };
+  // 旧形式（JWT）のキーのときだけ Authorization を付ける。新形式の sb_publishable_… は apikey だけでよい
+  if(/^eyJ/.test(SUPABASE_ANON_KEY)) h["Authorization"] = "Bearer " + SUPABASE_ANON_KEY;
   if(extra) for(var k in extra) h[k] = extra[k];
   return h;
 }
 function sbLoad(cb){
   if(!hasServer()){ sharedReady = false; if(cb) cb(false); return; }
-  fetch(SUPABASE_URL + "/rest/v1/spots?select=" + SHARED_COLS + "&order=created_at.desc&limit=2000",
+  fetch(sbBase() + "/rest/v1/spots?select=" + SHARED_COLS + "&order=created_at.desc&limit=2000",
         { headers: sbHeaders() })
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(rows){
@@ -560,13 +565,13 @@ function sbLoad(cb){
     });
 }
 function sbInsert(row, cb){
-  fetch(SUPABASE_URL + "/rest/v1/spots",
+  fetch(sbBase() + "/rest/v1/spots",
         { method:"POST", headers: sbHeaders({ "Prefer":"return=minimal" }), body: JSON.stringify(row) })
     .then(function(r){ cb(r.ok, r.status); })
     .catch(function(){ cb(false, 0); });
 }
 function sbDelete(id, token, cb){
-  fetch(SUPABASE_URL + "/rest/v1/rpc/delete_spot",
+  fetch(sbBase() + "/rest/v1/rpc/delete_spot",
         { method:"POST", headers: sbHeaders(), body: JSON.stringify({ p_id:id, p_token:token }) })
     .then(function(r){ return r.ok ? r.json() : false; })
     .then(function(ok){ cb(ok === true); })
