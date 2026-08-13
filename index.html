@@ -535,7 +535,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.009";
+var APP_VERSION = "1.010";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1068,7 +1068,8 @@ function openSheet(id){
     }
   }
   if(s.memo) h += '<p class="memo">'+esc(s.memo)+'</p>';
-  if(isShared){
+  // 登録者がいない聖地（最初から用意されているもの）は登録者行を出さない
+  if(isShared && (s.author || s.author_id)){
     h += '<div class="byline">' + avatarHtml(s.author_id, s.author)
        + '<div><b>'+esc(displayName(s.author_id, s.author))+'</b>'
        + '<span> が登録　'+esc(timeAgo(s.created_at))+'</span></div></div>';
@@ -1977,7 +1978,9 @@ function renderList(){
         : '<div class="thumb ph">📍</div>';
       badge = alreadyCopied(s.id)
         ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ 追加済み</span>'
-        : '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author||"名無し")+'</span>';
+        : (s.author
+            ? '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author)+'</span>'
+            : '');
       sub = s.work || s.addr || "作品未設定";
     }else{
       migrateVisits(s);
