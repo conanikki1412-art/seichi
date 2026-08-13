@@ -85,6 +85,55 @@
   }
   #locBtn{bottom:26px;}
   #styleBtn{bottom:78px;font-size:18px;}
+  #workBtn{bottom:130px;font-size:12px;font-weight:700;color:var(--navy);flex-direction:column;gap:1px;line-height:1.1;}
+  #workBtn.on{background:var(--navy);color:#fff;}
+
+  /* 作品で絞り込み */
+  #workSheet{
+    position:absolute;left:12px;right:12px;bottom:16px;z-index:9;display:none;
+    background:#fff;border-radius:16px;padding:8px;box-shadow:0 6px 26px rgba(0,0,0,.25);
+    max-height:60vh;overflow-y:auto;
+  }
+  #workSheet button{display:flex;width:100%;justify-content:space-between;gap:10px;
+    text-align:left;padding:12px 14px;border-radius:10px;font-size:15px;}
+  #workSheet button.on{background:#f6f6f8;font-weight:700;color:var(--red);}
+  #workSheet button i{font-style:normal;color:var(--sub);font-size:12px;font-weight:400;}
+
+  /* コース */
+  .course-line{stroke:var(--red);}
+  .num-pin{
+    width:30px;height:30px;border-radius:50%;background:var(--red);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;
+    border:2.5px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.35);cursor:pointer;
+  }
+  #coursePage{overflow-y:auto;background:#f7f7f9;}
+  .course-card{background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+  .course-card h4{margin:0;font-size:16px;font-weight:800;}
+  .course-card .cmeta{font-size:12px;color:var(--sub);margin-top:4px;display:flex;align-items:center;gap:6px;}
+  .course-card .cmeta .avatar,.course-card .cmeta .avatar-ph{width:20px;height:20px;font-size:10px;}
+  .course-card p{margin:8px 0 0;font-size:13px;color:#44444c;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .course-card .chips{display:flex;gap:6px;margin-top:10px;overflow-x:auto;}
+  .course-card .chips span{flex:none;font-size:11px;background:#f1f1f4;color:#555;border-radius:999px;padding:4px 10px;white-space:nowrap;}
+  .newbtn{
+    width:100%;background:var(--navy);color:#fff;border-radius:14px;padding:14px;
+    font-size:15px;font-weight:700;margin-bottom:12px;
+  }
+  .step{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
+  .step:last-child{border-bottom:none;}
+  .step .no{
+    width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;
+  }
+  .step .sname{flex:1;min-width:0;}
+  .step .sname b{display:block;font-size:14px;font-weight:700;}
+  .step .sname span{font-size:11px;color:var(--sub);}
+  .step .ops{display:flex;gap:4px;flex:none;}
+  .step .ops button{width:30px;height:30px;border-radius:8px;background:#f1f1f4;color:#666;font-size:13px;}
+  .pickrow{display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);}
+  .pickrow .sname{flex:1;min-width:0;}
+  .pickrow button{flex:none;background:var(--navy);color:#fff;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;}
+  .pickrow button.added{background:#eceef3;color:#8a8a95;}
 
   .pin{width:32px;height:42px;cursor:pointer;line-height:0;}
   .pin svg{width:32px;height:42px;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
@@ -353,12 +402,24 @@
         <div class="pin"><svg viewBox="0 0 32 42"><path d="M16 1.6c-7.1 0-12.9 5.8-12.9 12.9 0 3.5 1.6 7.4 4 11.2 2.4 3.8 5.4 7.3 7.6 9.6.7.8 1.9.8 2.6 0 2.2-2.3 5.2-5.8 7.6-9.6 2.4-3.8 4-7.7 4-11.2C28.9 7.4 23.1 1.6 16 1.6z" fill="#d7263d" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="14.5" r="5.2" fill="#fff"/></svg></div>
       </div>
 
+      <button id="workBtn" class="fab" aria-label="作品でしぼる"><span>作品</span></button>
       <button id="styleBtn" class="fab" aria-label="地図の種類">🗺</button>
       <button id="locBtn" class="fab" aria-label="現在地">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1b2a49" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3" stroke-linecap="round"/></svg>
       </button>
 
       <div id="styleSheet"></div>
+      <div id="workSheet"></div>
+      <div id="courseBar" style="display:none;position:absolute;left:12px;right:12px;bottom:16px;z-index:8;background:var(--navy);color:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 6px 22px rgba(0,0,0,.3);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <b id="courseBarTitle" style="font-size:14px;display:block;"></b>
+            <span id="courseBarSub" style="font-size:11px;opacity:.8;"></span>
+          </div>
+          <button id="courseBarOpen" style="flex:none;background:rgba(255,255,255,.15);color:#fff;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:700;">詳細</button>
+          <button id="courseBarClose" style="flex:none;background:rgba(255,255,255,.15);color:#fff;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:700;">終了</button>
+        </div>
+      </div>
 
       <div id="addBanner">
         <p id="addBannerText">地図を動かすか、下の欄に住所を入れて場所を合わせてください</p>
@@ -390,6 +451,46 @@
         <button class="chip" data-f="todo">未訪問</button>
       </div>
       <div class="cards" id="cards"></div>
+    </div>
+
+    <!-- ===== コース ===== -->
+    <div class="page" id="coursePage">
+      <div class="list-head">
+        <h1>モデルコース</h1>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px;">みんなの聖地をつないだ、おすすめの巡り方</div>
+      </div>
+      <div class="cards">
+        <button class="newbtn" id="btnNewCourse">＋ コースを作る</button>
+        <div id="courseList"></div>
+      </div>
+    </div>
+
+    <!-- ===== コース作成 ===== -->
+    <div id="coursePage2" style="position:absolute;inset:0;z-index:900;background:#fff;display:none;flex-direction:column;">
+      <div class="topbar">
+        <button class="cancel" id="cCancel">キャンセル</button>
+        <h3>コースを作る</h3>
+        <button id="cSave">投稿</button>
+      </div>
+      <div class="form-body">
+        <div class="field">
+          <label>コース名 <span style="color:var(--red)">*</span></label>
+          <input type="text" id="cTitle" placeholder="例：鳥取・北栄町 半日コース" maxlength="60">
+        </div>
+        <div class="field">
+          <label>説明</label>
+          <textarea id="cMemo" placeholder="まわる順番のコツ、所要時間、移動手段など" maxlength="1000"></textarea>
+        </div>
+        <div class="field">
+          <label>まわる順番（2〜20か所）</label>
+          <div id="cSteps"></div>
+        </div>
+        <div class="field">
+          <label>みんなの聖地から選ぶ</label>
+          <input type="text" id="cSearch" placeholder="名前や作品でしぼりこむ">
+          <div id="cPicker" style="max-height:46vh;overflow-y:auto;margin-top:8px;"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ===== 設定 ===== -->
@@ -522,6 +623,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
       <span>リスト</span>
     </button>
+    <button data-p="coursePage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 17C13 16 16 13 17 8.5"/></svg>
+      <span>コース</span>
+    </button>
     <button data-p="setPage">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>
       <span>設定</span>
@@ -542,7 +647,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.015";
+var APP_VERSION = "1.016";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -606,9 +711,28 @@ var dest = "personal";
 var pickMode = false, pickReturn = null;
 var map = null, markers = {};
 var sharedReady = false;
+var courses = [];          // モデルコース
+var courseView = null;     // 表示中のコース
+var courseTokens = {};     // 自分が作ったコースの鍵
 
 function hasServer(){ return !!(SUPABASE_URL && SUPABASE_ANON_KEY); }
-function currentList(){ return MODE === "shared" ? shared : personal; }
+function rawList(){ return MODE === "shared" ? shared : personal; }
+
+/* 作品でしぼりこむ */
+var workFilter = null;                     // null = すべて
+function workOf(s){ return (s.work || "").trim() || "作品未設定"; }
+function workList(){
+  var m = {};
+  rawList().forEach(function(s){ var w = workOf(s); m[w] = (m[w]||0) + 1; });
+  return Object.keys(m).sort(function(a,b){ return m[b]-m[a] || a.localeCompare(b,"ja"); })
+    .map(function(w){ return { name:w, n:m[w] }; });
+}
+function currentList(){
+  var l = rawList();
+  if(courseView) l = courseSpots();
+  else if(workFilter) l = l.filter(function(s){ return workOf(s) === workFilter; });
+  return l;
+}
 
 /* ================= 保存まわり ================= */
 function loadLocal(){
@@ -968,19 +1092,52 @@ function canDeletePhoto(id, url){ return !!adminKey || myPhotoUrls.indexOf(url) 
 function alreadyCopied(sharedId){
   return personal.some(function(p){ return p.fromShared === sharedId; });
 }
+function numPinEl(n){
+  var el = document.createElement("div");
+  el.className = "num-pin";
+  el.textContent = n;
+  return el;
+}
 function renderMarkers(){
   if(!map) return;
   Object.keys(markers).forEach(function(k){ markers[k].remove(); });
   markers = {};
-  currentList().forEach(function(s){
-    var kind = MODE === "shared"
-      ? (alreadyCopied(s.id) ? "added" : "shared")
-      : (s.visited ? "visited" : "todo");
-    var el = pinEl(kind);
+  var list = currentList();
+  list.forEach(function(s, i){
+    var el;
+    if(courseView){
+      el = numPinEl(i + 1);
+    }else{
+      var kind = MODE === "shared"
+        ? (alreadyCopied(s.id) ? "added" : "shared")
+        : (s.visited ? "visited" : "todo");
+      el = pinEl(kind);
+    }
     el.addEventListener("click", function(ev){ ev.stopPropagation(); openSheet(s.id); });
-    markers[s.id] = new maplibregl.Marker({ element: el, anchor:"bottom", subpixelPositioning: true })
-      .setLngLat([s.lng, s.lat]).addTo(map);
+    markers[s.id] = new maplibregl.Marker({
+        element: el, anchor: courseView ? "center" : "bottom", subpixelPositioning: true
+      }).setLngLat([s.lng, s.lat]).addTo(map);
   });
+  drawCourseLine(list);
+}
+
+/* コースの線 */
+function drawCourseLine(list){
+  if(!map || !map.isStyleLoaded || !map.getStyle) return;
+  try{
+    if(map.getLayer("course-line")) map.removeLayer("course-line");
+    if(map.getSource("course-line")) map.removeSource("course-line");
+  }catch(e){}
+  if(!courseView || !list || list.length < 2) return;
+  try{
+    map.addSource("course-line", { type:"geojson", data:{
+      type:"Feature", properties:{},
+      geometry:{ type:"LineString", coordinates: list.map(function(s){ return [s.lng, s.lat]; }) }
+    }});
+    map.addLayer({ id:"course-line", type:"line", source:"course-line",
+      layout:{ "line-cap":"round", "line-join":"round" },
+      paint:{ "line-color":"#d7263d", "line-width":3.5, "line-opacity":0.85, "line-dasharray":[2,1.4] } });
+  }catch(e){}
 }
 function flyTo(lat, lng, zoom){
   if(!map) return;
@@ -989,6 +1146,7 @@ function flyTo(lat, lng, zoom){
 
 /* ================= モード切替 ================= */
 function setMode(m, quiet){
+  if(MODE !== m){ workFilter = null; updateWorkBtn(); }
   MODE = m;
   localStorage.setItem(KEY_MODE, m);
   Array.prototype.forEach.call(document.querySelectorAll(".seg button[data-m]"), function(b){
@@ -1008,7 +1166,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".seg button[data-m]"), f
 });
 
 /* ================= 画面切り替え ================= */
-var PAGES = ["mapPage","listPage","setPage"];
+var PAGES = ["mapPage","listPage","coursePage","setPage"];
 function showPage(id){
   PAGES.forEach(function(p){ document.getElementById(p).classList.toggle("active", p===id); });
   Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function(b){
@@ -1016,6 +1174,7 @@ function showPage(id){
   });
   if(id==="mapPage" && map) setTimeout(function(){ map.resize(); }, 60);
   if(id==="listPage") renderList();
+  if(id==="coursePage") renderCourseList();
   if(id==="setPage") updateServerState();
 }
 Array.prototype.forEach.call(document.querySelectorAll("#nav button"), function(b){
@@ -1557,6 +1716,39 @@ document.getElementById("locBtn").addEventListener("click", function(){
     if(map) map.easeTo({ center:[pos.coords.longitude, pos.coords.latitude], zoom:16, duration:800 });
   }, function(){ toast("現在地を取得できませんでした"); }, { enableHighAccuracy:true, timeout:8000 });
 });
+/* ---------------- 作品でしぼりこむ ---------------- */
+var workSheet = document.getElementById("workSheet");
+var workBtn = document.getElementById("workBtn");
+function updateWorkBtn(){
+  workBtn.classList.toggle("on", !!workFilter);
+  workBtn.innerHTML = "<span>" + esc(workFilter ? workFilter.slice(0,3) : "作品") + "</span>";
+}
+function renderWorkSheet(){
+  var ws = workList();
+  var total = rawList().length;
+  workSheet.innerHTML =
+    '<button data-w="" class="'+(workFilter?"":"on")+'">すべての作品<i>'+total+'</i></button>'
+    + ws.map(function(w){
+        return '<button data-w="'+esc(w.name)+'" class="'+(workFilter===w.name?"on":"")+'">'
+             + esc(w.name)+'<i>'+w.n+'</i></button>';
+      }).join("");
+}
+workBtn.addEventListener("click", function(){
+  if(courseView){ toast("コースの表示中はしぼりこめません"); return; }
+  renderWorkSheet();
+  styleSheet.style.display = "none";
+  workSheet.style.display = workSheet.style.display === "block" ? "none" : "block";
+});
+workSheet.addEventListener("click", function(e){
+  var b = e.target.closest("button[data-w]");
+  if(!b) return;
+  workFilter = b.dataset.w || null;
+  workSheet.style.display = "none";
+  updateWorkBtn();
+  renderMarkers(); renderList(); fitAll();
+  toast(workFilter ? "「"+workFilter+"」でしぼりこみました" : "すべての作品を表示します");
+});
+
 var styleSheet = document.getElementById("styleSheet");
 function renderStyleSheet(){
   styleSheet.innerHTML = STYLES.map(function(s){
@@ -1942,22 +2134,24 @@ function renderList(){
   var statsEl = document.getElementById("stats");
   var arr;
 
+  var base = currentList();   // 作品のしぼりこみ・コース表示を反映した一覧
+
   if(MODE === "shared"){
-    var copied = shared.filter(function(s){ return alreadyCopied(s.id); }).length;
+    var copied = base.filter(function(s){ return alreadyCopied(s.id); }).length;
     statsEl.innerHTML =
-      '<div class="stat"><b>'+shared.length+'</b><span>みんなの聖地</span></div>'
+      '<div class="stat"><b>'+base.length+'</b><span>'+(workFilter ? 'この作品の聖地' : 'みんなの聖地')+'</span></div>'
     + '<div class="stat"><b>'+copied+'</b><span>自分に追加済み</span></div>';
-    arr = shared.slice();
+    arr = base.slice();
   }else{
-    var total = personal.length;
-    var vis = personal.filter(function(s){ return s.visited; }).length;
+    var total = base.length;
+    var vis = base.filter(function(s){ return s.visited; }).length;
     var rate = total ? Math.round(vis/total*100) : 0;
     statsEl.innerHTML =
       '<div class="stat"><b>'+vis+'</b><span>訪問済み</span></div>'
-    + '<div class="stat"><b>'+total+'</b><span>記録した聖地</span></div>'
+    + '<div class="stat"><b>'+total+'</b><span>'+(workFilter ? 'この作品の記録' : '記録した聖地')+'</span></div>'
     + '<div class="stat"><b>'+rate+'%</b><span>達成率</span></div>';
     document.getElementById("stBar").style.width = rate + "%";
-    arr = personal.slice().sort(function(a,b){ return (b.created||0)-(a.created||0); });
+    arr = base.slice().sort(function(a,b){ return (b.created||0)-(a.created||0); });
     if(filter==="visited") arr = arr.filter(function(s){ return s.visited; });
     if(filter==="todo")    arr = arr.filter(function(s){ return !s.visited; });
   }
@@ -1966,8 +2160,10 @@ function renderList(){
     var msg;
     if(MODE === "shared"){
       msg = !hasServer()
-        ? '共有サーバーが未設定です<br>setup手順に沿って設定してください'
-        : (sharedReady ? 'まだ誰も登録していません<br>「聖地を登録」から追加できます' : '共有サーバーに接続できません<br>通信状況をご確認ください');
+        ? 'みんなの聖地につながっていません'
+        : (workFilter ? 'この作品の聖地はまだありません'
+          : (sharedReady ? 'まだ誰も登録していません<br>「聖地を登録」から追加できます'
+                         : 'みんなの聖地につながりません<br>通信状況をご確認ください'));
     }else{
       msg = personal.length
         ? 'この条件の聖地はありません'
@@ -2006,6 +2202,236 @@ cardsEl.addEventListener("click", function(e){
   if(!c) return;
   showPage("mapPage");
   setTimeout(function(){ openSheet(c.dataset.id); }, 150);
+});
+
+/* ================= モデルコース ================= */
+var KEY_COURSE = "conan-seichi-course-tokens";
+try{ courseTokens = JSON.parse(localStorage.getItem(KEY_COURSE) || "{}"); }catch(e){ courseTokens = {}; }
+if(!courseTokens || typeof courseTokens !== "object") courseTokens = {};
+function saveCourseTokens(){ try{ localStorage.setItem(KEY_COURSE, JSON.stringify(courseTokens)); }catch(e){} }
+
+function sbLoadCourses(cb){
+  if(!hasServer()){ if(cb) cb(); return; }
+  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id"
+        + "&order=created_at.desc&limit=200", { headers: sbHeaders() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){ courses = rows || []; if(cb) cb(); })
+    .catch(function(){ if(cb) cb(); });
+}
+function sbAddCourse(row, cb){
+  fetch(sbBase() + "/rest/v1/courses",
+        { method:"POST", headers: sbHeaders({ "Prefer":"return=minimal" }), body: JSON.stringify(row) })
+    .then(function(r){ cb(r.ok); })
+    .catch(function(){ cb(false); });
+}
+function sbDeleteCourse(id, token, cb){
+  fetch(sbBase() + "/rest/v1/rpc/delete_course",
+        { method:"POST", headers: sbHeaders(), body: JSON.stringify({ p_id:id, p_token:token }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
+function spotById(id){
+  for(var i=0;i<shared.length;i++) if(String(shared[i].id) === String(id)) return shared[i];
+  return null;
+}
+function courseSpots(){
+  if(!courseView) return [];
+  return (courseView.spot_ids || []).map(spotById).filter(Boolean);
+}
+
+function renderCourseList(){
+  var el = document.getElementById("courseList");
+  if(!el) return;
+  if(!hasServer()){ el.innerHTML = '<div class="empty">みんなの聖地につながっていません</div>'; return; }
+  if(!courses.length){
+    el.innerHTML = '<div class="empty"><div class="big">🚩</div>まだコースがありません<br>上のボタンから作ってみてください</div>';
+    return;
+  }
+  el.innerHTML = courses.map(function(c){
+    var names = (c.spot_ids||[]).map(function(id){ var s = spotById(id); return s ? s.name : null; }).filter(Boolean);
+    return '<div class="course-card" data-cid="'+esc(c.id)+'">'
+      + '<h4>'+esc(c.title)+'</h4>'
+      + '<div class="cmeta">' + avatarHtml(c.author_id, c.author)
+      + '<span>'+esc(displayName(c.author_id, c.author))+' ・ '+names.length+'か所 ・ '+esc(timeAgo(c.created_at))+'</span></div>'
+      + (c.memo ? '<p>'+esc(c.memo)+'</p>' : '')
+      + '<div class="chips">' + names.map(function(n,i){ return '<span>'+(i+1)+'. '+esc(n)+'</span>'; }).join("") + '</div>'
+      + '</div>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll(".course-card"), function(card){
+    card.onclick = function(){
+      var c = courses.filter(function(x){ return String(x.id) === card.dataset.cid; })[0];
+      if(c) openCourse(c);
+    };
+  });
+}
+
+var courseBar = document.getElementById("courseBar");
+function openCourse(c){
+  var missing = (c.spot_ids||[]).filter(function(id){ return !spotById(id); }).length;
+  courseView = c;
+  workFilter = null; updateWorkBtn();
+  setMode("shared", true);
+  showPage("mapPage");
+  courseBar.style.display = "block";
+  document.getElementById("courseBarTitle").textContent = c.title;
+  document.getElementById("courseBarSub").textContent =
+    courseSpots().length + "か所" + (missing ? "（" + missing + "か所は削除済み）" : "");
+  renderMarkers(); renderList(); fitAll();
+  setTimeout(showCourseSheet, 250);
+}
+function closeCourse(){
+  courseView = null;
+  courseBar.style.display = "none";
+  closeSheet();
+  renderMarkers(); renderList(); fitAll();
+}
+document.getElementById("courseBarClose").addEventListener("click", closeCourse);
+document.getElementById("courseBarOpen").addEventListener("click", showCourseSheet);
+
+function showCourseSheet(){
+  if(!courseView) return;
+  var c = courseView;
+  var list = courseSpots();
+  var canDel = !!courseTokens[c.id] || !!adminKey;
+  var h = '<div class="sheet-pad">'
+    + '<div class="sheet-title"><h2>'+esc(c.title)+'</h2><button class="closeX" id="sClose">×</button></div>'
+    + '<div class="byline">' + avatarHtml(c.author_id, c.author)
+    + '<div><b>'+esc(displayName(c.author_id, c.author))+'</b><span> のコース　'+esc(timeAgo(c.created_at))+'</span></div></div>'
+    + (c.memo ? '<p class="memo">'+esc(c.memo)+'</p>' : '')
+    + '</div>'
+    + '<div class="sheet-pad">'
+    + list.map(function(s,i){
+        return '<div class="step" data-sid="'+esc(s.id)+'"><div class="no">'+(i+1)+'</div>'
+             + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")+'</span></div></div>';
+      }).join("")
+    + '</div>'
+    + '<div class="sheet-actions">'
+    + '<button class="act-edit" id="cvClose">コース表示を終了</button>'
+    + (canDel ? '<button class="act-del" id="cvDel">🗑</button>' : '')
+    + '</div>';
+  sheetBody.innerHTML = h;
+  sheetBody.scrollTop = 0;
+  sheet.style.transition = ""; sheet.style.transform = "";
+  sheet.style.display = "flex";
+  sheetMask.style.display = "block";
+  sheetMask.style.opacity = "";
+  document.getElementById("sClose").onclick = closeSheet;
+  document.getElementById("cvClose").onclick = closeCourse;
+  var dl = document.getElementById("cvDel");
+  if(dl) dl.onclick = function(){
+    if(!confirm("コース「"+c.title+"」を削除しますか？")) return;
+    sbDeleteCourse(c.id, courseTokens[c.id] || adminKey, function(ok){
+      if(!ok){ toast("削除できませんでした"); return; }
+      delete courseTokens[c.id]; saveCourseTokens();
+      closeCourse();
+      sbLoadCourses(renderCourseList);
+      toast("削除しました");
+    });
+  };
+  Array.prototype.forEach.call(sheetBody.querySelectorAll(".step"), function(st){
+    st.onclick = function(){ openSheet(st.dataset.sid); };
+  });
+}
+
+/* ---- コース作成 ---- */
+var coursePage2 = document.getElementById("coursePage2");
+var draftSteps = [];
+document.getElementById("btnNewCourse").addEventListener("click", function(){
+  if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
+  if(shared.length < 2){ toast("みんなの聖地が2か所以上必要です"); return; }
+  draftSteps = [];
+  document.getElementById("cTitle").value = "";
+  document.getElementById("cMemo").value = "";
+  document.getElementById("cSearch").value = "";
+  renderSteps(); renderPicker();
+  coursePage2.style.display = "flex";
+  document.getElementById("nav").style.display = "none";
+});
+document.getElementById("cCancel").addEventListener("click", function(){
+  coursePage2.style.display = "none";
+  document.getElementById("nav").style.display = "flex";
+});
+function renderSteps(){
+  var el = document.getElementById("cSteps");
+  if(!draftSteps.length){
+    el.innerHTML = '<p class="hint" style="margin:0;">下の一覧から、まわりたい順にタップして追加してください</p>';
+    return;
+  }
+  el.innerHTML = draftSteps.map(function(id,i){
+    var s = spotById(id);
+    return '<div class="step"><div class="no">'+(i+1)+'</div>'
+      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? (s.work||"作品未設定") : "")+'</span></div>'
+      + '<div class="ops">'
+      + '<button data-up="'+i+'">↑</button><button data-down="'+i+'">↓</button><button data-del="'+i+'">×</button>'
+      + '</div></div>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("button"), function(b){
+    b.onclick = function(){
+      var i;
+      if(b.dataset.up !== undefined){ i = +b.dataset.up; if(i>0){ var t=draftSteps[i-1]; draftSteps[i-1]=draftSteps[i]; draftSteps[i]=t; } }
+      else if(b.dataset.down !== undefined){ i = +b.dataset.down; if(i<draftSteps.length-1){ var t2=draftSteps[i+1]; draftSteps[i+1]=draftSteps[i]; draftSteps[i]=t2; } }
+      else { draftSteps.splice(+b.dataset.del, 1); }
+      renderSteps(); renderPicker();
+    };
+  });
+}
+function renderPicker(){
+  var q = (document.getElementById("cSearch").value || "").trim().toLowerCase();
+  var el = document.getElementById("cPicker");
+  var list = shared.filter(function(s){
+    return !q || (s.name+" "+(s.work||"")+" "+(s.addr||"")).toLowerCase().indexOf(q) >= 0;
+  }).slice(0, 120);
+  if(!list.length){ el.innerHTML = '<p class="hint" style="margin:8px 0 0;">該当する聖地がありません</p>'; return; }
+  el.innerHTML = list.map(function(s){
+    var added = draftSteps.indexOf(s.id) >= 0;
+    return '<div class="pickrow"><div class="sname"><b style="font-size:14px;">'+esc(s.name)+'</b>'
+      + '<span style="font-size:11px;color:var(--sub);display:block;">'+esc(s.work||"作品未設定")+'</span></div>'
+      + '<button data-add="'+esc(s.id)+'" class="'+(added?"added":"")+'">'+(added?"追加済み":"追加")+'</button></div>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("button[data-add]"), function(b){
+    b.onclick = function(){
+      var id = b.dataset.add;
+      if(draftSteps.indexOf(id) >= 0){ toast("すでに入っています"); return; }
+      if(draftSteps.length >= 20){ toast("20か所までです"); return; }
+      draftSteps.push(id);
+      renderSteps(); renderPicker();
+    };
+  });
+}
+document.getElementById("cSearch").addEventListener("input", renderPicker);
+document.getElementById("cSave").addEventListener("click", function(){
+  var title = (document.getElementById("cTitle").value || "").trim();
+  if(!title){ toast("コース名を入れてください"); return; }
+  if(draftSteps.length < 2){ toast("2か所以上えらんでください"); return; }
+  if(!nickname){
+    var n = prompt("表示される名前を入力してください", "");
+    if(n === null) return;
+    nickname = (n || "名無し").trim().slice(0,40);
+    localStorage.setItem(KEY_NICK, nickname);
+    updateProfileUI();
+    sbSaveProfile(nickname, profileIcon, function(){});
+  }
+  var token = randToken();
+  var btn = document.getElementById("cSave");
+  btn.textContent = "投稿中…";
+  sbAddCourse({
+    title: title.slice(0,60),
+    memo: (document.getElementById("cMemo").value || "").trim().slice(0,1000),
+    spot_ids: draftSteps.slice(),
+    author: nickname, author_id: myUid, edit_token: token
+  }, function(ok){
+    btn.textContent = "投稿";
+    if(!ok){ toast("投稿できませんでした"); return; }
+    coursePage2.style.display = "none";
+    document.getElementById("nav").style.display = "flex";
+    sbLoadCourses(function(){
+      var mine = courses.filter(function(c){ return c.title === title && c.author_id === myUid; })[0];
+      if(mine){ courseTokens[mine.id] = token; saveCourseTokens(); }
+      renderCourseList();
+      toast("コースを投稿しました");
+    });
+  });
 });
 
 /* ================= 設定 ================= */
@@ -2183,9 +2609,10 @@ if(!hasServer() && MODE === "shared") MODE = "personal";
 setMode(MODE, true);
 updateServerState();
 if(hasServer()){
-  sbLoadProfiles(function(){ closeSheet(); renderList(); });
+  sbLoadProfiles(function(){ closeSheet(); renderList(); renderCourseList(); });
+  sbLoadCourses(renderCourseList);
   sbLoad(function(){
-    renderMarkers(); renderList();
+    renderMarkers(); renderList(); renderCourseList(); updateWorkBtn();
     if(MODE === "shared") fitAll();
   });
 }
