@@ -141,8 +141,10 @@
   .gallery{
     display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;
     -webkit-overflow-scrolling:touch;scrollbar-width:none;
-    padding:14px 18px 0;scroll-padding:0 18px;
+    padding:14px 0 0;
   }
+  /* 左右の余白は擬似要素で作る（横スクロール時にpaddingが効かない環境があるため） */
+  .gallery::before,.gallery::after{content:"";flex:0 0 8px;}
   .gallery::-webkit-scrollbar{display:none;}
   .gallery img{
     flex:0 0 calc(100% - 36px);aspect-ratio:16/9;max-height:28vh;
@@ -394,47 +396,51 @@
     <div class="page" id="setPage">
       <div class="list-head">
         <h1>設定</h1>
-        <div id="verBox" style="font-size:11px;color:var(--sub);margin-top:4px;display:inline-block;padding:4px 2px;">バージョン <span id="verLabel">-</span></div>
+        <div id="verBox" style="font-size:11px;color:var(--sub);margin-top:4px;display:inline-block;padding:4px 2px;">アプリのバージョン <span id="verLabel">-</span></div>
       </div>
       <div class="set-sec">
         <div class="prof-edit">
           <div id="profIcon"></div>
           <div class="prof-right">
             <input type="text" id="profName" placeholder="ニックネーム" maxlength="40">
-            <p class="prof-hint">アイコンをタップして画像を選べます。名前とアイコンは、みんなの聖地への登録とコメントに表示されます</p>
+            <p class="prof-hint">ここで決めたニックネームとアイコンが、聖地を登録したときやコメントを書いたときに表示されます。丸い部分をタップすると写真を選べます</p>
           </div>
         </div>
         <div class="set-item" id="btnProfSave">
-          <div><div>プロフィールを保存</div><small id="profState">未設定</small></div><div class="go">保存</div>
+          <div><div>プロフィールを保存</div><small id="profState">まだ決めていません</small></div><div class="go">保存</div>
         </div>
       </div>
       <div class="set-sec">
         <div class="set-item">
-          <div><div>共有サーバー</div><small id="sbState">確認中…</small></div>
-          <div class="go" id="btnReload">再読込</div>
+          <div><div>みんなの聖地との接続</div><small id="sbState">確認しています…</small></div>
+          <div class="go" id="btnReload">最新にする</div>
         </div>
         <div class="set-item" id="btnAdmin" style="display:none;">
-          <div><div>管理キー</div><small id="adminState">未設定</small></div><div class="go">入力</div>
+          <div><div>管理用の合言葉</div><small id="adminState">なし</small></div><div class="go">入力</div>
         </div>
       </div>
       <div class="set-sec">
         <div class="set-item" id="btnExport">
-          <div><div>自分の記録を書き出す</div><small>JSONファイルとしてバックアップ</small></div><div class="go">書き出す</div>
+          <div><div>バックアップを保存</div><small>スマホを買い替えても記録を移せるように、ファイルにして残します</small></div><div class="go">保存</div>
         </div>
         <div class="set-item" id="btnImport">
-          <div><div>自分の記録を読み込む</div><small>バックアップから復元（現在の記録に追加）</small></div><div class="go">読み込む</div>
+          <div><div>バックアップから戻す</div><small>保存したファイルを読み込みます。いま入っている記録に追加されます</small></div><div class="go">読み込む</div>
         </div>
       </div>
       <div class="set-sec">
         <div class="set-item" id="btnReset">
-          <div><div class="danger">自分の記録をすべて削除</div><small>元に戻せません。みんなの聖地は消えません</small></div><div class="go danger">削除</div>
+          <div><div class="danger">自分の記録をすべて消す</div><small>元には戻せません。みんなの聖地のほうは消えません</small></div><div class="go danger">消す</div>
         </div>
       </div>
       <div class="set-note">
-        「自分の記録」はこの端末のブラウザ内にのみ保存されます。機種変更や履歴の削除で消えることがあるので、ときどきバックアップしてください。<br>
-        「みんなの聖地」は共有サーバーに保存され、誰でも見られます。個人情報や住所を特定されたくない場所は登録しないでください。<br><br>
-        地図：MapLibre GL JS ／ ベクタータイル OpenFreeMap（© OpenStreetMap contributors）／ 淡色・航空写真 国土地理院<br>
-        地名検索：Nominatim（OpenStreetMap）
+        <b>「自分の記録」について</b><br>
+        訪問日・写真・メモは、このスマホの中だけに保存されています。他の人には見えません。<br>
+        スマホを買い替えたときや、ブラウザのデータを消したときに一緒に消えてしまうので、ときどきバックアップしておくと安心です。<br><br>
+        <b>「みんなの聖地」について</b><br>
+        登録した場所・写真・コメントは、このアプリを開いた人全員に見えます。自宅など、人に知られたくない場所は登録しないでください。<br><br>
+        <b>使っている地図など</b><br>
+        地図：MapLibre GL JS ／ OpenFreeMap（© OpenStreetMap contributors）／ 国土地理院<br>
+        住所・地名の検索：Nominatim（OpenStreetMap）
       </div>
     </div>
 
@@ -535,7 +541,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.010";
+var APP_VERSION = "1.014";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -836,10 +842,10 @@ function sbDelete(id, token, cb){
 function updateServerState(){
   var el = document.getElementById("sbState");
   if(!el) return;
-  if(!hasServer()){ el.innerHTML = '<span class="dot ng"></span>未設定（みんなの聖地は使えません）'; return; }
+  if(!hasServer()){ el.innerHTML = '<span class="dot ng"></span>設定されていません'; return; }
   el.innerHTML = sharedReady
-    ? '<span class="dot ok"></span>接続OK ・ ' + shared.length + '件'
-    : '<span class="dot ng"></span>接続できません';
+    ? '<span class="dot ok"></span>つながっています（聖地 ' + shared.length + '件）'
+    : '<span class="dot ng"></span>つながっていません';
 }
 
 /* ================= 地図 ================= */
@@ -1406,7 +1412,7 @@ function copyToPersonal(s){
 
 /* 自分の記録 → みんなの聖地へ登録 */
 function shareExisting(s){
-  if(!hasServer()){ toast("共有サーバーが未設定です"); return; }
+  if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
   if(!confirm("「"+s.name+"」をみんなの聖地に登録します。名前・作品・住所・メモが全員に公開されます。よろしいですか？")) return;
   askNickname(function(nick){
     var token = randToken();
@@ -1709,7 +1715,7 @@ function setDest(d){
 }
 Array.prototype.forEach.call(document.querySelectorAll(".destseg button"), function(b){
   b.addEventListener("click", function(){
-    if(b.dataset.d === "shared" && !hasServer()){ toast("共有サーバーが未設定です"); return; }
+    if(b.dataset.d === "shared" && !hasServer()){ toast("みんなの聖地につながっていません"); return; }
     setDest(b.dataset.d);
   });
 });
@@ -1804,7 +1810,7 @@ document.getElementById("fSave").addEventListener("click", function(){
   if(!name){ toast("場所の名前を入力してください"); fName.focus(); return; }
 
   if(dest === "shared" && !editingId){
-    if(!hasServer()){ toast("共有サーバーが未設定です"); return; }
+    if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
     var nick = (fAuthor.value || "").trim() || nickname || "名無し";
     nickname = nick.slice(0,40);
     localStorage.setItem(KEY_NICK, nickname);
@@ -2016,8 +2022,8 @@ function updateProfileUI(){
     : '<div class="avatar-ph">'+esc((nickname || "？").slice(0,1))+'</div>';
   var st = document.getElementById("profState");
   if(st) st.textContent = nickname
-    ? (profileIcon ? "設定済み（アイコンあり）" : "名前のみ設定済み")
-    : "未設定";
+    ? (profileIcon ? "「" + nickname + "」アイコンあり" : "「" + nickname + "」アイコンなし")
+    : "まだ決めていません";
 }
 profIconBox.addEventListener("click", function(){ avatarInput.click(); });
 profNameInput.addEventListener("input", function(){
@@ -2035,7 +2041,7 @@ avatarInput.addEventListener("change", function(e){
   });
 });
 document.getElementById("btnProfSave").addEventListener("click", function(){
-  if(!hasServer()){ toast("共有サーバーが未設定です"); return; }
+  if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
   var name = (profNameInput.value || "").trim().slice(0,40);
   if(!name){ toast("ニックネームを入力してください"); return; }
   nickname = name;
@@ -2087,8 +2093,8 @@ function compressSquare(file, size, quality, cb){
 function updateAdminState(){
   var el = document.getElementById("adminState");
   if(el) el.textContent = adminKey
-    ? "設定済み（すべての共有ピンを調整・削除できます）"
-    : "未設定（自分が登録したピンのみ調整できます）";
+    ? "入力済み。すべての聖地とコメントを消せます"
+    : "なし。自分が登録したものだけ直せます";
   // 管理キーが入っている端末では最初から表示する
   if(adminKey) document.getElementById("btnAdmin").style.display = "flex";
 }
@@ -2105,26 +2111,26 @@ function updateAdminState(){
     if(taps < 5) return;
     taps = 0;
     var row = document.getElementById("btnAdmin");
-    if(row.style.display === "flex"){ toast("管理メニューは表示中です"); return; }
+    if(row.style.display === "flex"){ toast("すでに表示されています"); return; }
     row.style.display = "flex";
-    toast("管理メニューを表示しました");
+    toast("管理用の項目を表示しました");
   });
 })();
 document.getElementById("btnAdmin").addEventListener("click", function(){
-  var k = prompt("管理キーを入力（空にすると解除）", adminKey || "");
+  var k = prompt("管理用の合言葉（空にすると解除）", adminKey || "");
   if(k === null) return;
   adminKey = (k || "").trim();
   localStorage.setItem(KEY_ADMIN, adminKey);
   updateAdminState();
   closeSheet(); renderMarkers();
-  toast(adminKey ? "管理キーを設定しました" : "管理キーを解除しました");
+  toast(adminKey ? "管理モードになりました" : "管理モードを解除しました");
 });
 document.getElementById("btnReload").addEventListener("click", function(){
-  if(!hasServer()){ toast("共有サーバーが未設定です"); return; }
+  if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
   toast("読み込み中…");
   sbLoad(function(ok){
     renderMarkers(); renderList();
-    toast(ok ? "最新の状態にしました" : "接続できませんでした");
+    toast(ok ? "最新にしました" : "つながりませんでした");
   });
 });
 document.getElementById("btnExport").addEventListener("click", function(){
@@ -2133,7 +2139,7 @@ document.getElementById("btnExport").addEventListener("click", function(){
   a.href = URL.createObjectURL(blob);
   a.download = "seichi-backup-" + new Date().toISOString().slice(0,10) + ".json";
   document.body.appendChild(a); a.click(); a.remove();
-  toast("バックアップを書き出しました");
+  toast("バックアップを保存しました");
 });
 document.getElementById("btnImport").addEventListener("click", function(){
   document.getElementById("importInput").click();
@@ -2154,14 +2160,14 @@ document.getElementById("importInput").addEventListener("change", function(e){
       });
       saveLocal(); setMode("personal", true); renderMarkers(); renderList(); fitAll();
       toast(n + "件を読み込みました");
-    }catch(err){ toast("ファイルを読み込めませんでした"); }
+    }catch(err){ toast("そのファイルは読み込めませんでした"); }
   };
   r.readAsText(f);
   e.target.value = "";
 });
 document.getElementById("btnReset").addEventListener("click", function(){
-  if(!confirm("自分の記録をすべて削除します。よろしいですか？")) return;
-  if(!confirm("本当に削除しますか？元に戻せません。")) return;
+  if(!confirm("このスマホに保存した記録をすべて消します。よろしいですか？")) return;
+  if(!confirm("本当に消しますか？元には戻せません。")) return;
   personal = []; saveLocal(); renderMarkers(); renderList(); toast("削除しました");
 });
 
