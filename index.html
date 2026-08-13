@@ -535,7 +535,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.008";
+var APP_VERSION = "1.009";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1196,7 +1196,7 @@ function openSheet(id){
     var ds = document.getElementById("sDelShared");
     if(ds) ds.onclick = function(){
       if(!confirm("みんなの聖地から「"+s.name+"」を削除しますか？")) return;
-      sbDelete(s.id, myTokens[s.id], function(ok){
+      sbDelete(s.id, sharedToken(s.id), function(ok){
         if(!ok){ toast("削除できませんでした"); return; }
         delete myTokens[s.id]; saveTokens();
         sbLoad(function(){ renderMarkers(); renderList(); });
@@ -1237,7 +1237,7 @@ function renderComments(list){
   if(!list){ el.innerHTML = '<p class="cmt-empty">コメントを読み込めませんでした</p>'; return; }
   if(!list.length){ el.innerHTML = '<p class="cmt-empty">まだコメントはありません</p>'; return; }
   el.innerHTML = list.map(function(c){
-    var mine = !!cmtTokens[c.id] || !!adminKey;
+    var mine = !!adminKey;   // コメントを消せるのは管理者だけ
     return '<div class="cmt" data-cid="'+esc(c.id)+'">'
       + avatarHtml(c.user_id, c.name)
       + '<div class="cmt-body"><div class="cmt-head"><b>'+esc(displayName(c.user_id, c.name))+'</b>'
@@ -1250,12 +1250,9 @@ function renderComments(list){
     b.onclick = function(){
       var cid = b.dataset.del;
       if(!confirm("このコメントを削除しますか？")) return;
-      sbDeleteComment(cid, cmtTokens[cid] || adminKey, function(ok){
+      sbDeleteComment(cid, adminKey, function(ok){
         if(!ok){ toast("削除できませんでした"); return; }
-        delete cmtTokens[cid]; saveCmtTokens();
         toast("削除しました");
-        var wrap = el.closest("#sheetBody");
-        var sid = wrap ? null : null;
         reloadComments();
       });
     };
@@ -1289,17 +1286,7 @@ function setupComments(s){
       send.textContent = "送信";
       if(!ok){ toast("送信できませんでした"); return; }
       input.value = "";
-      sbLoadComments(s.id, function(list){
-        // 直前に投稿したものを特定して、削除できるように鍵を覚える
-        if(list && list.length){
-          for(var i = list.length - 1; i >= 0; i--){
-            if(list[i].user_id === myUid && list[i].body === body && !cmtTokens[list[i].id]){
-              cmtTokens[list[i].id] = token; saveCmtTokens(); break;
-            }
-          }
-        }
-        renderComments(list);
-      });
+      sbLoadComments(s.id, renderComments);
       toast("コメントを投稿しました");
     });
   };
