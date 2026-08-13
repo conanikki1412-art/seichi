@@ -490,7 +490,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.003";
+var APP_VERSION = "1.005";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -506,6 +506,8 @@ var KEY_MODE  = "conan-seichi-mode";
 var KEY_NICK  = "conan-seichi-nick";
 var KEY_TOKEN = "conan-seichi-tokens";
 var KEY_ADMIN = "conan-seichi-admin";
+var KEY_DEVICE = "conan-seichi-device";
+var KEY_MYPHOTOS = "conan-seichi-myphotos";
 var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author,photos";
 var SHARED_PHOTO_MAX = 3;   // 共有モードの写真枚数の上限
 var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
@@ -685,6 +687,22 @@ function sbUploadAll(list, cb){
   })();
 }
 
+function sbAppendPhotos(id, urls, token, cb){
+  fetch(sbBase() + "/rest/v1/rpc/append_spot_photos",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_id:id, p_urls:urls, p_token:token }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
+function sbRemovePhoto(id, url, token, cb){
+  fetch(sbBase() + "/rest/v1/rpc/remove_spot_photo",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_id:id, p_url:url, p_token:token }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
 function sbSetPhotos(id, token, urls, cb){
   fetch(sbBase() + "/rest/v1/rpc/set_spot_photos",
         { method:"POST", headers: sbHeaders(),
@@ -764,6 +782,29 @@ function pinEl(kind){
 /* 共有スポットを編集できるか（自分が登録した／管理キーを持っている） */
 function sharedToken(id){ return myTokens[id] || adminKey || ""; }
 function canEditShared(id){ return !!(myTokens[id] || adminKey); }
+
+/* 端末ごとの合言葉。自分が入れた写真だけを消せるようにするために使う */
+var deviceToken = localStorage.getItem(KEY_DEVICE) || "";
+if(!deviceToken){
+  deviceToken = randToken();
+  try{ localStorage.setItem(KEY_DEVICE, deviceToken); }catch(e){}
+}
+var myPhotoUrls = [];
+try{ myPhotoUrls = JSON.parse(localStorage.getItem(KEY_MYPHOTOS) || "[]"); }catch(e){ myPhotoUrls = []; }
+if(!Array.isArray(myPhotoUrls)) myPhotoUrls = [];
+function rememberMyPhotos(urls){
+  urls.forEach(function(u){ if(myPhotoUrls.indexOf(u) < 0) myPhotoUrls.push(u); });
+  try{ localStorage.setItem(KEY_MYPHOTOS, JSON.stringify(myPhotoUrls.slice(-200))); }catch(e){}
+}
+function forgetMyPhoto(url){
+  myPhotoUrls = myPhotoUrls.filter(function(u){ return u !== url; });
+  try{ localStorage.setItem(KEY_MYPHOTOS, JSON.stringify(myPhotoUrls)); }catch(e){}
+}
+/* 追加・削除のときにサーバーへ渡す合言葉 */
+function photoToken(id){ return myTokens[id] || adminKey || deviceToken; }
+/* 写真を消せるのは「自分が入れた写真」と「管理キーを持つ人」だけ。
+   ピンの登録者でも、他人が入れた写真は消せない */
+function canDeletePhoto(id, url){ return !!adminKey || myPhotoUrls.indexOf(url) >= 0; }
 
 function alreadyCopied(sharedId){
   return personal.some(function(p){ return p.fromShared === sharedId; });
@@ -880,16 +921,26 @@ function openSheet(id){
      + '" target="_blank" rel="noopener" style="font-weight:700;text-decoration:none;">ルート案内</a></p>';
   h += '</div>';
 
-  if(isShared && canEditShared(s.id)){
-    // 自分の投稿（または管理キーあり）は写真を追加・削除できる
-    h += '<div class="thumbs">';
-    photos.forEach(function(p,i){
-      h += '<div class="ph-wrap"><img src="'+esc(p)+'" alt=""><button data-ph="'+i+'">×</button></div>';
-    });
-    if(photos.length < SHARED_PHOTO_MAX){
-      h += '<button class="photo-add" id="sAddPhoto"><span style="font-size:20px;">＋</span>写真</button>';
+  if(isShared){
+    // 空きがあれば誰でも追加できる。削除できるのは登録者・入れた本人・管理キーのみ
+    var myOnes = photos.filter(function(p){ return canDeletePhoto(s.id, p); });
+    var hasRoom = photos.length < SHARED_PHOTO_MAX;
+    if(hasRoom || myOnes.length){
+      h += '<div class="thumbs">';
+      photos.forEach(function(p,i){
+        if(!canDeletePhoto(s.id, p)) return;
+        h += '<div class="ph-wrap"><img src="'+esc(p)+'" alt=""><button data-ph="'+i+'">×</button></div>';
+      });
+      if(hasRoom){
+        h += '<button class="photo-add" id="sAddPhoto"><span style="font-size:20px;">＋</span>写真</button>';
+      }
+      h += '</div>';
+      h += '<p class="meta" style="padding:0 18px;">'
+         + (hasRoom
+             ? 'あと'+(SHARED_PHOTO_MAX - photos.length)+'枚まで、誰でも写真を追加できます'
+             : '写真は'+SHARED_PHOTO_MAX+'枚そろっています')
+         + '</p>';
     }
-    h += '</div>';
   }
 
   h += '<div class="sheet-actions">';
@@ -950,10 +1001,18 @@ function openSheet(id){
   if(addPh) addPh.onclick = function(){ photoTarget = s; sharedPhotoInput.click(); };
   Array.prototype.forEach.call(sheetBody.querySelectorAll("button[data-ph]"), function(b){
     b.onclick = function(){
-      if(!confirm("この写真を削除しますか？")) return;
-      var next = photos.slice();
-      next.splice(+b.dataset.ph, 1);
-      saveSharedPhotos(s, next);
+      var url = photos[+b.dataset.ph];
+      if(!url || !confirm("この写真を削除しますか？")) return;
+      toast("削除中…");
+      sbRemovePhoto(s.id, url, photoToken(s.id), function(ok){
+        if(!ok){ toast("削除できませんでした（権限がない可能性があります）"); return; }
+        forgetMyPhoto(url);
+        sbLoad(function(){
+          renderMarkers(); renderList();
+          toast("写真を削除しました");
+          setTimeout(function(){ openSheet(s.id); }, 150);
+        });
+      });
     };
   });
 
@@ -1004,13 +1063,14 @@ function openSheet(id){
 var photoTarget = null;
 var sharedPhotoInput = document.getElementById("sharedPhotoInput");
 
-function saveSharedPhotos(s, urls){
-  toast("更新中…");
-  sbSetPhotos(s.id, sharedToken(s.id), urls, function(ok){
-    if(!ok){ toast("更新できませんでした（権限がない可能性があります）"); return; }
+function addSharedPhotos(s, urls){
+  toast("反映中…");
+  sbAppendPhotos(s.id, urls, photoToken(s.id), function(ok){
+    if(!ok){ toast("追加できませんでした。ほかの人が先に埋めたかもしれません"); return; }
+    rememberMyPhotos(urls);
     sbLoad(function(){
       renderMarkers(); renderList();
-      toast("写真を更新しました");
+      toast("写真を追加しました");
       setTimeout(function(){ openSheet(s.id); }, 150);
     });
   });
@@ -1034,7 +1094,7 @@ sharedPhotoInput.addEventListener("change", function(e){
         toast("写真を送信中…");
         sbUploadAll(datas, function(urls){
           if(!urls.length){ toast(lastUploadError || "アップロードできませんでした"); return; }
-          saveSharedPhotos(s, safePhotos(have.concat(urls)).slice(0, SHARED_PHOTO_MAX));
+          addSharedPhotos(s, safePhotos(urls));
         });
       }
     });
@@ -1132,6 +1192,7 @@ function shareExisting(s){
           return x.name === s.name && Math.abs(x.lat - s.lat) < 1e-6;
         })[0];
         if(mine){ myTokens[mine.id] = token; saveTokens(); }
+        rememberMyPhotos(urls || []);
         renderMarkers(); renderList();
       });
     });
@@ -1544,6 +1605,7 @@ document.getElementById("fSave").addEventListener("click", function(){
           return x.name === name && Math.abs(x.lat - lat) < 1e-6;
         })[0];
         if(mine){ myTokens[mine.id] = token; saveTokens(); }
+        rememberMyPhotos(urls || []);
         renderMarkers(); renderList();
         showPage("mapPage");
         if(mine) setTimeout(function(){ openSheet(mine.id); }, 250);
