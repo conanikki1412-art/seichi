@@ -330,7 +330,10 @@
 
     <!-- ===== 設定 ===== -->
     <div class="page" id="setPage">
-      <div class="list-head"><h1>設定</h1></div>
+      <div class="list-head">
+        <h1>設定</h1>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px;">バージョン <span id="verLabel">-</span></div>
+      </div>
       <div class="set-sec">
         <div class="set-item" id="btnNick">
           <div><div>ニックネーム</div><small id="nickState">未設定</small></div><div class="go">変更</div>
@@ -458,7 +461,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの日付を変えると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "2026-08-13-a";
+var APP_VERSION = "2026-08-13-b";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -550,9 +553,12 @@ function sbBase(){
   return String(SUPABASE_URL).replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
 }
 function sbHeaders(extra){
-  var h = { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" };
-  // 旧形式（JWT）のキーのときだけ Authorization を付ける。新形式の sb_publishable_… は apikey だけでよい
-  if(/^eyJ/.test(SUPABASE_ANON_KEY)) h["Authorization"] = "Bearer " + SUPABASE_ANON_KEY;
+  // Storage は Authorization が必須なので、キーの形式にかかわらず両方付ける
+  var h = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+    "Content-Type": "application/json"
+  };
   if(extra) for(var k in extra) h[k] = extra[k];
   return h;
 }
@@ -582,6 +588,7 @@ function sbInsert(row, cb){
     .catch(function(){ cb(false, 0); });
 }
 /* 画像をStorageにアップロードして公開URLを返す */
+var lastUploadError = "";
 function dataUrlToBlob(d){
   var parts = String(d).split(","), bin = atob(parts[1]);
   var u8 = new Uint8Array(bin.length);
@@ -595,8 +602,17 @@ function sbUpload(dataUrl, cb){
   var h = sbHeaders();
   h["Content-Type"] = "image/jpeg";
   fetch(sbBase() + "/storage/v1/object/spot-photos/" + path, { method:"POST", headers:h, body:blob })
-    .then(function(r){ cb(r.ok ? sbBase() + "/storage/v1/object/public/spot-photos/" + path : null); })
-    .catch(function(){ cb(null); });
+    .then(function(r){
+      if(r.ok){ cb(sbBase() + "/storage/v1/object/public/spot-photos/" + path); return; }
+      return r.text().then(function(t){
+        lastUploadError = "写真アップロード失敗 " + r.status + " " + String(t).slice(0,120);
+        cb(null);
+      });
+    })
+    .catch(function(e){
+      lastUploadError = "写真アップロード失敗（通信エラー）";
+      cb(null);
+    });
 }
 function sbUploadAll(list, cb){
   var out = [], i = 0;
@@ -1251,7 +1267,7 @@ document.getElementById("fSave").addEventListener("click", function(){
     sbUploadAll(pics, function(urls){
     if(pics.length && !urls.length){
       saveBtn.textContent = "保存";
-      toast("写真をアップロードできませんでした");
+      toast(lastUploadError || "写真をアップロードできませんでした");
       return;
     }
     saveBtn.textContent = "保存中…";
@@ -1504,6 +1520,7 @@ document.getElementById("btnReset").addEventListener("click", function(){
 
 /* ================= 起動 ================= */
 loadLocal();
+document.getElementById("verLabel").textContent = APP_VERSION;
 updateNickState();
 updateAdminState();
 renderStyleSheet();
