@@ -515,6 +515,7 @@
         <div class="field">
           <label>まわる順番（2〜20か所）・区間ごとの移動手段</label>
           <div id="cSteps"></div>
+          <div id="cTotal" style="font-size:12px;color:var(--sub);margin-top:8px;"></div>
         </div>
         <div class="field">
           <label>みんなの聖地から選ぶ</label>
@@ -678,7 +679,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.022";
+var APP_VERSION = "1.023";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2377,7 +2378,7 @@ function renderCourseList(){
       + '<h4>'+esc(c.title)+'</h4>'
       + '<div class="cmeta">' + avatarHtml(c.author_id, c.author)
       + '<span>'+esc(displayName(c.author_id, c.author))+' ・ '+names.length+'か所 ・ '+esc(timeAgo(c.created_at))+'</span></div>'
-      + courseTags(c)
+      + totalTag(c) + courseTags(c)
       + (c.memo ? '<p>'+esc(c.memo)+'</p>' : '')
       + '<div class="chips">' + names.map(function(n,i){ return '<span>'+(i+1)+'. '+esc(n)+'</span>'; }).join("") + '</div>'
       + '</div>';
@@ -2422,7 +2423,7 @@ function showCourseSheet(){
     + '<div class="sheet-title"><h2>'+esc(c.title)+'</h2><button class="closeX" id="sClose">×</button></div>'
     + '<div class="byline">' + avatarHtml(c.author_id, c.author)
     + '<div><b>'+esc(displayName(c.author_id, c.author))+'</b><span> のコース　'+esc(timeAgo(c.created_at))+'</span></div></div>'
-    + courseTags(c)
+    + totalTag(c) + courseTags(c)
     + (c.memo ? '<p class="memo">'+esc(c.memo)+'</p>' : '')
     + '</div>'
     + '<div class="sheet-pad">'
@@ -2480,6 +2481,53 @@ function courseTags(c){
   t.forEach(function(x){ if(!seen[x]){ seen[x] = 1; uniq.push(x); } });
   return uniq.map(function(x){ return '<span class="tag">'+esc(x)+'</span>'; }).join("");
 }
+/* 「1時間30分」「約45分」「1.5時間」などを分に直す。読めなければ null */
+function parseMinutes(str){
+  var t = String(str == null ? "" : str)
+    .replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+    .replace(/[．]/g, ".").trim();
+  if(!t) return null;
+  var m = 0, hit = false;
+  var h = t.match(/(\d+(?:\.\d+)?)\s*(?:時間|h|hr|hours?)/i);
+  if(h){ m += parseFloat(h[1]) * 60; hit = true; }
+  var mi = t.match(/(\d+(?:\.\d+)?)\s*(?:分|min|m\b)/i);
+  if(mi){ m += parseFloat(mi[1]); hit = true; }
+  if(!hit){
+    var only = t.match(/^\D*(\d+(?:\.\d+)?)\D*$/);
+    if(only){ m = parseFloat(only[1]); hit = true; }   // 数字だけなら「分」とみなす
+  }
+  return hit ? Math.round(m) : null;
+}
+function formatMinutes(n){
+  if(!n || n <= 0) return "";
+  var h = Math.floor(n / 60), m = n % 60;
+  if(h && m) return h + "時間" + m + "分";
+  if(h) return h + "時間";
+  return m + "分";
+}
+/* コースの所要時間合計（滞在＋移動） */
+function courseTotal(c){
+  var total = 0, known = 0, blank = 0;
+  function add(arr, n){
+    for(var i=0;i<n;i++){
+      var v = (arr || [])[i];
+      if(v === undefined || String(v).trim() === ""){ blank++; continue; }
+      var mm = parseMinutes(v);
+      if(mm === null){ blank++; continue; }
+      total += mm; known++;
+    }
+  }
+  var n = (c.spot_ids || []).length;
+  add(c.stay_time, n);
+  add(c.leg_time, Math.max(0, n - 1));
+  return { total: total, known: known, blank: blank };
+}
+function totalTag(c){
+  var t = courseTotal(c);
+  if(!t.known || !t.total) return "";
+  return '<span class="tag">🕒 合計 約' + formatMinutes(t.total) + (t.blank ? '〜' : '') + '</span>';
+}
+
 function legText(c, i){
   var t = (c.leg_transport || [])[i] || "";
   var m = (c.leg_time || [])[i] || "";
@@ -2554,12 +2602,23 @@ function renderSteps(){
     sel.onchange = function(){ draftLegT[+sel.dataset.legt] = sel.value; };
   });
   Array.prototype.forEach.call(el.querySelectorAll("input[data-legm]"), function(inp){
-    inp.oninput = function(){ draftLegM[+inp.dataset.legm] = inp.value; };
+    inp.oninput = function(){ draftLegM[+inp.dataset.legm] = inp.value; updateDraftTotal(); };
   });
   Array.prototype.forEach.call(el.querySelectorAll("input[data-stay]"), function(inp){
-    inp.oninput = function(){ draftStay[+inp.dataset.stay] = inp.value; };
+    inp.oninput = function(){ draftStay[+inp.dataset.stay] = inp.value; updateDraftTotal(); };
   });
+  updateDraftTotal();
 }
+function updateDraftTotal(){
+  var el = document.getElementById("cTotal");
+  if(!el) return;
+  if(draftSteps.length < 2){ el.textContent = ""; return; }
+  var t = courseTotal({ spot_ids:draftSteps, stay_time:draftStay, leg_time:draftLegM });
+  el.textContent = t.known
+    ? "所要時間の合計：約" + formatMinutes(t.total) + (t.blank ? "（未入力の欄があります）" : "")
+    : "滞在時間や移動時間を入れると、合計が出ます";
+}
+
 function renderPicker(){
   var q = (document.getElementById("cSearch").value || "").trim().toLowerCase();
   var el = document.getElementById("cPicker");
