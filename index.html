@@ -128,6 +128,10 @@
   .step .sname{flex:1;min-width:0;}
   .step .sname b{display:block;font-size:14px;font-weight:700;}
   .step .sname span{font-size:11px;color:var(--sub);}
+  .stayin{
+    margin-top:6px;width:100%;border:1px solid var(--line);border-radius:8px;
+    padding:7px 9px;background:#fafafb;font-size:13px;outline:none;
+  }
   .step .ops{display:flex;gap:4px;flex:none;}
   .step .ops button{width:30px;height:30px;border-radius:8px;background:#f1f1f4;color:#666;font-size:13px;}
   .pickrow{display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);}
@@ -674,7 +678,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.020";
+var APP_VERSION = "1.021";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2267,7 +2271,7 @@ function saveCourseTokens(){ try{ localStorage.setItem(KEY_COURSE, JSON.stringif
 
 function sbLoadCourses(cb){
   if(!hasServer()){ if(cb) cb(); return; }
-  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id,leg_transport,leg_time"
+  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id,leg_transport,leg_time,stay_time"
         + "&order=created_at.desc&limit=200", { headers: sbHeaders() })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){ courses = rows || []; if(cb) cb(); })
@@ -2359,8 +2363,10 @@ function showCourseSheet(){
     + '</div>'
     + '<div class="sheet-pad">'
     + list.map(function(s,i){
+        var st = (c.stay_time || [])[i] || "";
         var row = '<div class="step" data-sid="'+esc(s.id)+'"><div class="no">'+(i+1)+'</div>'
-                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")+'</span></div></div>';
+                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")
+                + (st ? ' ・ 滞在 '+esc(st) : '') + '</span></div></div>';
         if(i < list.length - 1){
           var lt = legText(c, i);
           row += '<div class="leg-view">' + (lt ? esc(lt) : "移動手段の記載なし") + '</div>';
@@ -2400,7 +2406,7 @@ function showCourseSheet(){
 var coursePage2 = document.getElementById("coursePage2");
 var draftSteps = [];
 var TRANSPORTS = ["徒歩", "自転車", "車", "電車", "バス", "タクシー", "その他"];
-var draftLegT = [], draftLegM = [];   // 区間ごとの移動手段・所要時間
+var draftLegT = [], draftLegM = [], draftStay = [];   // 区間ごとの移動手段・所要時間／地点ごとの滞在時間
 
 /* コース全体で使われている移動手段をまとめて出す */
 function courseTags(c){
@@ -2419,7 +2425,7 @@ function legText(c, i){
 document.getElementById("btnNewCourse").addEventListener("click", function(){
   if(!hasServer()){ toast("オンラインにつながっていません"); return; }
   if(shared.length < 2){ toast("みんなの聖地が2か所以上必要です"); return; }
-  draftSteps = []; draftLegT = []; draftLegM = [];
+  draftSteps = []; draftLegT = []; draftLegM = []; draftStay = [];
   document.getElementById("cTitle").value = "";
   document.getElementById("cMemo").value = "";
   document.getElementById("cSearch").value = "";
@@ -2441,7 +2447,9 @@ function renderSteps(){
   draftSteps.forEach(function(id,i){
     var s = spotById(id);
     h += '<div class="step"><div class="no">'+(i+1)+'</div>'
-      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? (s.work||"作品未設定") : "")+'</span></div>'
+      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? (s.work||"作品未設定") : "")+'</span>'
+      + '<input class="stayin" type="text" data-stay="'+i+'" placeholder="滞在時間（例：60分）" maxlength="20" value="'+esc(draftStay[i]||"")+'">'
+      + '</div>'
       + '<div class="ops">'
       + '<button data-up="'+i+'">↑</button><button data-down="'+i+'">↓</button><button data-del="'+i+'">×</button>'
       + '</div></div>';
@@ -2461,15 +2469,17 @@ function renderSteps(){
   Array.prototype.forEach.call(el.querySelectorAll(".ops button"), function(b){
     b.onclick = function(){
       var i;
+      function swap(a, x, y){ var t = a[x]; a[x] = a[y]; a[y] = t; }
       if(b.dataset.up !== undefined){
         i = +b.dataset.up;
-        if(i>0){ var t=draftSteps[i-1]; draftSteps[i-1]=draftSteps[i]; draftSteps[i]=t; }
+        if(i>0){ swap(draftSteps, i-1, i); swap(draftStay, i-1, i); }
       }else if(b.dataset.down !== undefined){
         i = +b.dataset.down;
-        if(i<draftSteps.length-1){ var t2=draftSteps[i+1]; draftSteps[i+1]=draftSteps[i]; draftSteps[i]=t2; }
+        if(i<draftSteps.length-1){ swap(draftSteps, i, i+1); swap(draftStay, i, i+1); }
       }else{
         i = +b.dataset.del;
         draftSteps.splice(i, 1);
+        draftStay.splice(i, 1);
         var li = Math.min(i, draftSteps.length - 1);
         if(li >= 0){ draftLegT.splice(li, 1); draftLegM.splice(li, 1); }
       }
@@ -2481,6 +2491,9 @@ function renderSteps(){
   });
   Array.prototype.forEach.call(el.querySelectorAll("input[data-legm]"), function(inp){
     inp.oninput = function(){ draftLegM[+inp.dataset.legm] = inp.value; };
+  });
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-stay]"), function(inp){
+    inp.oninput = function(){ draftStay[+inp.dataset.stay] = inp.value; };
   });
 }
 function renderPicker(){
@@ -2500,6 +2513,7 @@ function renderPicker(){
     b.onclick = function(){
       if(draftSteps.length >= 20){ toast("20か所までです"); return; }
       draftSteps.push(b.dataset.add);
+      draftStay.push("");
       renderSteps(); renderPicker();
     };
   });
@@ -2526,6 +2540,7 @@ document.getElementById("cSave").addEventListener("click", function(){
     spot_ids: draftSteps.slice(),
     leg_transport: draftLegT.slice(0, Math.max(0, draftSteps.length - 1)).map(function(x){ return (x||"").slice(0,20); }),
     leg_time:      draftLegM.slice(0, Math.max(0, draftSteps.length - 1)).map(function(x){ return (x||"").slice(0,20); }),
+    stay_time:     draftSteps.map(function(_, i){ return (draftStay[i]||"").slice(0,20); }),
     author: nickname, author_id: myUid, edit_token: token
   }, function(ok){
     btn.textContent = "投稿";
