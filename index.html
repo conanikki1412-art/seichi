@@ -678,7 +678,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.021";
+var APP_VERSION = "1.022";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -976,6 +976,15 @@ function sbSetPhotos(id, token, urls, cb){
   fetch(sbBase() + "/rest/v1/rpc/set_spot_photos",
         { method:"POST", headers: sbHeaders(),
           body: JSON.stringify({ p_id:id, p_token:token, p_urls:urls }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
+function sbUpdateInfo(id, token, info, cb){
+  fetch(sbBase() + "/rest/v1/rpc/update_spot_info",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_id:id, p_token:token,
+            p_name:info.name, p_work:info.work, p_addr:info.addr, p_memo:info.memo }) })
     .then(function(r){ return r.ok ? r.json() : false; })
     .then(function(ok){ cb(ok === true); })
     .catch(function(){ cb(false); });
@@ -1316,6 +1325,7 @@ function openSheet(id){
       ? '<button class="act-edit" id="sOpenPersonal">自分の記録で開く</button>'
       : '<button class="act-main" id="sCopy">自分の記録に追加</button>';
     if(canEditShared(s.id)){
+      h += '<button class="act-edit" id="sEditShared">内容を編集</button>';
       h += '<button class="act-edit" id="sMove">位置を微調整</button>';
       h += '<button class="act-del" id="sDelShared">🗑</button>';
     }
@@ -1372,6 +1382,8 @@ function openSheet(id){
 
   var mv = document.getElementById("sMove");
   if(mv) mv.onclick = function(){ startMove(s); };
+  var es = document.getElementById("sEditShared");
+  if(es) es.onclick = function(){ closeSheet(); openSharedEdit(s); };
 
   // 共有ピンの写真を追加・削除
   var addPh = document.getElementById("sAddPhoto");
@@ -1959,7 +1971,30 @@ Array.prototype.forEach.call(document.querySelectorAll(".destseg button"), funct
   });
 });
 
+/* みんなの聖地の内容を編集（登録者・管理者のみ） */
+var editingShared = null;
+function openSharedEdit(s){
+  editingShared = s;
+  editingId = null;
+  draft = { lat:s.lat, lng:s.lng, photos:[], visits:[], addrAuto:false, visited:false };
+  fName.value = s.name || ""; fWork.value = s.work || "";
+  fAddr.value = s.addr || ""; fMemo.value = s.memo || "";
+  document.getElementById("fDestField").style.display = "none";
+  setDest("shared");
+  document.getElementById("fAuthorField").style.display = "none";
+  document.getElementById("fPhotoField").style.display = "none";   // 写真は詳細画面から追加する
+  document.getElementById("fPick").style.display = "none";
+  document.getElementById("fTitle").textContent = "みんなの聖地を編集";
+  document.getElementById("fCoord").textContent =
+    s.lat.toFixed(5) + ", " + s.lng.toFixed(5) + "（位置は「位置を微調整」から変更できます）";
+  renderFormPhotos();
+  formPage.style.display = "flex";
+  chrome();
+}
+
 function openForm(id, lat, lng){
+  editingShared = null;
+  document.getElementById("fPick").style.display = "block";
   editingId = id || null;
   if(id){
     var s = personal.filter(function(x){ return x.id===id; })[0];
@@ -2038,7 +2073,10 @@ document.getElementById("fAddVisit").addEventListener("click", function(){
 });
 document.getElementById("fVisitToggle").addEventListener("click", function(){ setVisited(!draft.visited); });
 document.getElementById("fCancel").addEventListener("click", function(){
-  formPage.style.display = "none"; draft = null; editingId = null; chrome();
+  formPage.style.display = "none";
+  draft = null; editingId = null; editingShared = null;
+  document.getElementById("fPick").style.display = "block";
+  chrome();
 });
 document.getElementById("fPick").addEventListener("click", function(){
   startPick("form", "地図を動かすか、住所を入れて正しい場所に合わせてください");
@@ -2047,6 +2085,32 @@ document.getElementById("fPick").addEventListener("click", function(){
 document.getElementById("fSave").addEventListener("click", function(){
   var name = fName.value.trim();
   if(!name){ toast("場所の名前を入力してください"); fName.focus(); return; }
+
+  // みんなの聖地の内容を更新
+  if(editingShared){
+    var target = editingShared;
+    var btn = document.getElementById("fSave");
+    btn.textContent = "保存中…";
+    sbUpdateInfo(target.id, sharedToken(target.id), {
+      name: name.slice(0,80),
+      work: fWork.value.trim().slice(0,120),
+      addr: fAddr.value.trim().slice(0,200),
+      memo: fMemo.value.trim().slice(0,1000)
+    }, function(ok){
+      btn.textContent = "保存";
+      if(!ok){ toast("保存できませんでした（権限がない可能性があります）"); return; }
+      formPage.style.display = "none";
+      editingShared = null; draft = null;
+      document.getElementById("fPick").style.display = "block";
+      chrome();
+      sbLoad(function(){
+        renderMarkers(); renderList(); renderCourseList();
+        toast("内容を更新しました");
+        setTimeout(function(){ openSheet(target.id); }, 200);
+      });
+    });
+    return;
+  }
 
   if(dest === "shared" && !editingId){
     if(!hasServer()){ toast("オンラインにつながっていません"); return; }
