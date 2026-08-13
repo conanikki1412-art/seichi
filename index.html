@@ -224,6 +224,41 @@
     width:82px;height:82px;border-radius:10px;border:1.5px dashed #ccc;color:#999;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;background:#fafafb;
   }
+  /* プロフィール・コメント */
+  .avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;background:#e6e8ee;}
+  .avatar-ph{
+    width:34px;height:34px;border-radius:50%;flex:none;background:var(--navy);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
+  }
+  .byline{display:flex;align-items:center;gap:8px;margin-top:12px;}
+  .byline b{font-size:13px;font-weight:700;}
+  .byline span{font-size:11px;color:var(--sub);}
+  .cmt-sec{padding:18px 18px 0;border-top:1px solid var(--line);margin-top:18px;}
+  .cmt-sec h4{margin:0 0 12px;font-size:14px;font-weight:800;}
+  .cmt{display:flex;gap:10px;margin-bottom:14px;}
+  .cmt .cmt-body{flex:1;min-width:0;}
+  .cmt .cmt-head{display:flex;align-items:baseline;gap:8px;}
+  .cmt .cmt-head b{font-size:13px;font-weight:700;}
+  .cmt .cmt-head span{font-size:11px;color:var(--sub);}
+  .cmt p{margin:2px 0 0;font-size:14px;white-space:pre-wrap;word-break:break-word;}
+  .cmt button{width:26px;height:26px;border-radius:50%;background:#f1f1f4;color:#9a9aa4;flex:none;font-size:13px;}
+  .cmt-empty{font-size:13px;color:var(--sub);margin:0 0 14px;}
+  .cmt-form{display:flex;gap:8px;align-items:flex-end;padding-bottom:4px;}
+  .cmt-form textarea{
+    flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    background:#fafafb;outline:none;min-height:44px;max-height:120px;font-size:15px;line-height:1.6;resize:vertical;
+  }
+  .cmt-form button{
+    flex:none;background:var(--navy);color:#fff;border-radius:12px;padding:12px 16px;font-size:14px;font-weight:700;
+  }
+  .prof-edit{display:flex;align-items:center;gap:14px;padding:16px;}
+  .prof-edit .avatar,.prof-edit .avatar-ph{width:64px;height:64px;font-size:26px;}
+  .prof-edit .prof-right{flex:1;min-width:0;}
+  .prof-edit input{
+    width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:#fafafb;outline:none;
+  }
+  .prof-hint{font-size:11px;color:var(--sub);margin:6px 0 0;}
+
   .visit-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
   .visit-row span{font-size:12px;color:var(--sub);width:52px;flex:none;font-weight:700;}
   .visit-row input{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fafafb;outline:none;}
@@ -362,9 +397,18 @@
         <div id="verBox" style="font-size:11px;color:var(--sub);margin-top:4px;display:inline-block;padding:4px 2px;">バージョン <span id="verLabel">-</span></div>
       </div>
       <div class="set-sec">
-        <div class="set-item" id="btnNick">
-          <div><div>ニックネーム</div><small id="nickState">未設定</small></div><div class="go">変更</div>
+        <div class="prof-edit">
+          <div id="profIcon"></div>
+          <div class="prof-right">
+            <input type="text" id="profName" placeholder="ニックネーム" maxlength="40">
+            <p class="prof-hint">アイコンをタップして画像を選べます。名前とアイコンは、みんなの聖地への登録とコメントに表示されます</p>
+          </div>
         </div>
+        <div class="set-item" id="btnProfSave">
+          <div><div>プロフィールを保存</div><small id="profState">未設定</small></div><div class="go">保存</div>
+        </div>
+      </div>
+      <div class="set-sec">
         <div class="set-item">
           <div><div>共有サーバー</div><small id="sbState">確認中…</small></div>
           <div class="go" id="btnReload">再読込</div>
@@ -480,6 +524,7 @@
 
 <input type="file" id="importInput" accept="application/json,.json" hidden>
 <input type="file" id="sharedPhotoInput" accept="image/*" multiple hidden>
+<input type="file" id="avatarInput" accept="image/*" hidden>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
@@ -490,7 +535,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.007";
+var APP_VERSION = "1.008";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -508,7 +553,10 @@ var KEY_TOKEN = "conan-seichi-tokens";
 var KEY_ADMIN = "conan-seichi-admin";
 var KEY_DEVICE = "conan-seichi-device";
 var KEY_MYPHOTOS = "conan-seichi-myphotos";
-var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author,photos";
+var KEY_UID = "conan-seichi-uid";
+var KEY_ICON = "conan-seichi-icon";
+var KEY_CMT = "conan-seichi-cmt-tokens";
+var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author,author_id,photos";
 var SHARED_PHOTO_MAX = 10;  // 共有モードの写真枚数の上限（SQL側の上限と必ず揃えること）
 var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
 var PHOTO_MAX_PX = 900;     // 保存する画像の長辺
@@ -691,6 +739,61 @@ function sbUploadAll(list, cb){
   })();
 }
 
+/* プロフィール・コメントのやりとり */
+function sbLoadProfiles(cb){
+  if(!hasServer()){ if(cb) cb(); return; }
+  fetch(sbBase() + "/rest/v1/profiles?select=user_id,name,icon&limit=1000", { headers: sbHeaders() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      profiles = {};
+      (rows || []).forEach(function(p){ if(p && p.user_id) profiles[p.user_id] = p; });
+      if(cb) cb();
+    })
+    .catch(function(){ if(cb) cb(); });
+}
+function sbSaveProfile(name, icon, cb){
+  fetch(sbBase() + "/rest/v1/rpc/save_profile",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_uid:myUid, p_secret:deviceToken, p_name:name, p_icon:icon || null }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
+function sbUploadAvatar(dataUrl, cb){
+  var blob;
+  try{ blob = dataUrlToBlob(dataUrl); }catch(e){ cb(null); return; }
+  var path = uid() + Math.random().toString(36).slice(2,8) + ".jpg";
+  var h = sbHeaders();
+  h["Content-Type"] = "image/jpeg";
+  fetch(sbBase() + "/storage/v1/object/avatars/" + path, { method:"POST", headers:h, body:blob })
+    .then(function(r){ cb(r.ok ? sbBase() + "/storage/v1/object/public/avatars/" + path : null); })
+    .catch(function(){ cb(null); });
+}
+function sbLoadComments(spotId, cb){
+  fetch(sbBase() + "/rest/v1/comments?select=id,spot_id,user_id,name,body,created_at"
+        + "&spot_id=eq." + encodeURIComponent(spotId) + "&order=created_at.asc&limit=200",
+        { headers: sbHeaders() })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(rows){ cb(rows); })
+    .catch(function(){ cb(null); });
+}
+function sbAddComment(spotId, body, token, cb){
+  fetch(sbBase() + "/rest/v1/comments",
+        { method:"POST", headers: sbHeaders({ "Prefer":"return=minimal" }),
+          body: JSON.stringify({ spot_id:spotId, user_id:myUid, name:(nickname||"名無し").slice(0,40),
+                                 body:body.slice(0,500), edit_token:token }) })
+    .then(function(r){ cb(r.ok); })
+    .catch(function(){ cb(false); });
+}
+function sbDeleteComment(id, token, cb){
+  fetch(sbBase() + "/rest/v1/rpc/delete_comment",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_id:id, p_token:token }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
+
 function sbAppendPhotos(id, urls, token, cb){
   fetch(sbBase() + "/rest/v1/rpc/append_spot_photos",
         { method:"POST", headers: sbHeaders(),
@@ -806,6 +909,51 @@ function forgetMyPhoto(url){
 }
 /* 追加・削除のときにサーバーへ渡す合言葉 */
 function photoToken(id){ return myTokens[id] || adminKey || deviceToken; }
+
+/* ---------------- プロフィール ---------------- */
+var myUid = localStorage.getItem(KEY_UID) || "";
+if(!myUid){
+  myUid = "u" + randToken();
+  try{ localStorage.setItem(KEY_UID, myUid); }catch(e){}
+}
+var profileIcon = localStorage.getItem(KEY_ICON) || "";
+var profiles = {};                 // user_id -> { name, icon }
+var cmtTokens = {};                // comment id -> edit_token
+try{ cmtTokens = JSON.parse(localStorage.getItem(KEY_CMT) || "{}"); }catch(e){ cmtTokens = {}; }
+if(!cmtTokens || typeof cmtTokens !== "object") cmtTokens = {};
+function saveCmtTokens(){ try{ localStorage.setItem(KEY_CMT, JSON.stringify(cmtTokens)); }catch(e){} }
+
+function safeAvatarUrl(u){
+  u = String(u == null ? "" : u);
+  if(/["'<>\s\\]/.test(u)) return "";
+  var prefix = sbBase() + "/storage/v1/object/public/avatars/";
+  if(SUPABASE_URL && u.indexOf(prefix) === 0 && /^[A-Za-z0-9._-]+$/.test(u.slice(prefix.length))) return u;
+  return "";
+}
+function profileOf(uid){
+  var p = (uid && profiles[uid]) || null;
+  return { name: (p && p.name) || "", icon: safeAvatarUrl(p && p.icon) };
+}
+function avatarHtml(uid, fallbackName, cls){
+  var p = profileOf(uid);
+  var nm = p.name || fallbackName || "名無し";
+  if(p.icon) return '<img class="avatar '+(cls||"")+'" src="'+esc(p.icon)+'" alt="">';
+  return '<div class="avatar-ph '+(cls||"")+'">'+esc(nm.slice(0,1))+'</div>';
+}
+function displayName(uid, fallbackName){
+  var p = profileOf(uid);
+  return p.name || fallbackName || "名無し";
+}
+function timeAgo(iso){
+  var t = Date.parse(iso);
+  if(isNaN(t)) return "";
+  var d = Math.floor((Date.now() - t) / 1000);
+  if(d < 60) return "たった今";
+  if(d < 3600) return Math.floor(d/60) + "分前";
+  if(d < 86400) return Math.floor(d/3600) + "時間前";
+  if(d < 2592000) return Math.floor(d/86400) + "日前";
+  return new Date(t).toISOString().slice(0,10).replace(/-/g,"/");
+}
 /* 写真を消せるのは「自分が入れた写真」と「管理キーを持つ人」だけ。
    ピンの登録者でも、他人が入れた写真は消せない */
 function canDeletePhoto(id, url){ return !!adminKey || myPhotoUrls.indexOf(url) >= 0; }
@@ -920,8 +1068,12 @@ function openSheet(id){
     }
   }
   if(s.memo) h += '<p class="memo">'+esc(s.memo)+'</p>';
+  if(isShared){
+    h += '<div class="byline">' + avatarHtml(s.author_id, s.author)
+       + '<div><b>'+esc(displayName(s.author_id, s.author))+'</b>'
+       + '<span> が登録　'+esc(timeAgo(s.created_at))+'</span></div></div>';
+  }
   h += '<p class="meta">';
-  if(isShared && s.author) h += '登録者：'+esc(s.author)+' ・ ';
   h += s.lat.toFixed(5)+', '+s.lng.toFixed(5)
      + ' ・ <a href="https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng
      + '" target="_blank" rel="noopener" style="font-weight:700;text-decoration:none;">ルート案内</a></p>';
@@ -967,6 +1119,16 @@ function openSheet(id){
     if(!s.fromShared) h += '<button class="act-edit" id="sShare">みんなの聖地にも登録</button>';
   }
   h += '</div>';
+
+  if(isShared){
+    h += '<div class="cmt-sec">'
+       + '<h4>コメント</h4>'
+       + '<div id="cmtList"><p class="cmt-empty">読み込み中…</p></div>'
+       + '<div class="cmt-form">'
+       + '<textarea id="cmtInput" placeholder="この場所の情報や感想を書く" maxlength="500"></textarea>'
+       + '<button id="cmtSend">送信</button>'
+       + '</div></div>';
+  }
 
   sheetBody.innerHTML = h;
   sheetBody.scrollTop = 0;
@@ -1063,7 +1225,84 @@ function openSheet(id){
     if(sh) sh.onclick = function(){ shareExisting(s); };
   }
 
+  if(isShared) setupComments(s);
+
   if(document.getElementById("mapPage").classList.contains("active")) flyTo(s.lat, s.lng, 15);
+}
+
+/* ---------------- コメント ---------------- */
+function renderComments(list){
+  var el = document.getElementById("cmtList");
+  if(!el) return;
+  if(!list){ el.innerHTML = '<p class="cmt-empty">コメントを読み込めませんでした</p>'; return; }
+  if(!list.length){ el.innerHTML = '<p class="cmt-empty">まだコメントはありません</p>'; return; }
+  el.innerHTML = list.map(function(c){
+    var mine = !!cmtTokens[c.id] || !!adminKey;
+    return '<div class="cmt" data-cid="'+esc(c.id)+'">'
+      + avatarHtml(c.user_id, c.name)
+      + '<div class="cmt-body"><div class="cmt-head"><b>'+esc(displayName(c.user_id, c.name))+'</b>'
+      + '<span>'+esc(timeAgo(c.created_at))+'</span></div>'
+      + '<p>'+esc(c.body)+'</p></div>'
+      + (mine ? '<button data-del="'+esc(c.id)+'">×</button>' : '')
+      + '</div>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("button[data-del]"), function(b){
+    b.onclick = function(){
+      var cid = b.dataset.del;
+      if(!confirm("このコメントを削除しますか？")) return;
+      sbDeleteComment(cid, cmtTokens[cid] || adminKey, function(ok){
+        if(!ok){ toast("削除できませんでした"); return; }
+        delete cmtTokens[cid]; saveCmtTokens();
+        toast("削除しました");
+        var wrap = el.closest("#sheetBody");
+        var sid = wrap ? null : null;
+        reloadComments();
+      });
+    };
+  });
+}
+var commentSpotId = null;
+function reloadComments(){
+  if(!commentSpotId) return;
+  sbLoadComments(commentSpotId, renderComments);
+}
+function setupComments(s){
+  commentSpotId = s.id;
+  reloadComments();
+  var input = document.getElementById("cmtInput");
+  var send  = document.getElementById("cmtSend");
+  if(!input || !send) return;
+  send.onclick = function(){
+    var body = (input.value || "").trim();
+    if(!body){ toast("コメントを入力してください"); return; }
+    if(!nickname){
+      var n = prompt("表示される名前を入力してください", "");
+      if(n === null) return;
+      nickname = (n || "名無し").trim().slice(0,40);
+      localStorage.setItem(KEY_NICK, nickname);
+      updateProfileUI();
+      sbSaveProfile(nickname, profileIcon, function(){});
+    }
+    send.textContent = "送信中…";
+    var token = randToken();
+    sbAddComment(s.id, body, token, function(ok){
+      send.textContent = "送信";
+      if(!ok){ toast("送信できませんでした"); return; }
+      input.value = "";
+      sbLoadComments(s.id, function(list){
+        // 直前に投稿したものを特定して、削除できるように鍵を覚える
+        if(list && list.length){
+          for(var i = list.length - 1; i >= 0; i--){
+            if(list[i].user_id === myUid && list[i].body === body && !cmtTokens[list[i].id]){
+              cmtTokens[list[i].id] = token; saveCmtTokens(); break;
+            }
+          }
+        }
+        renderComments(list);
+      });
+      toast("コメントを投稿しました");
+    });
+  };
 }
 /* ---- 共有ピンの写真の追加・削除 ---- */
 var photoTarget = null;
@@ -1189,7 +1428,7 @@ function shareExisting(s){
     sbInsert({
       name: s.name.slice(0,80), work: (s.work||"").slice(0,120), addr: (s.addr||"").slice(0,200),
       memo: (s.memo||"").slice(0,1000), lat: s.lat, lng: s.lng,
-      author: nick.slice(0,40), edit_token: token, photos: urls
+      author: nick.slice(0,40), author_id: myUid, edit_token: token, photos: urls
     }, function(ok){
       if(!ok){ toast("登録できませんでした"); return; }
       toast("みんなの聖地に登録しました");
@@ -1211,7 +1450,7 @@ function askNickname(cb){
   if(n === null) return;
   nickname = (n || "名無し").trim().slice(0,40);
   localStorage.setItem(KEY_NICK, nickname);
-  updateNickState();
+  updateProfileUI();
   cb(nickname);
 }
 
@@ -1581,7 +1820,7 @@ document.getElementById("fSave").addEventListener("click", function(){
     var nick = (fAuthor.value || "").trim() || nickname || "名無し";
     nickname = nick.slice(0,40);
     localStorage.setItem(KEY_NICK, nickname);
-    updateNickState();
+    updateProfileUI();
     var token = randToken();
     var lat = draft.lat, lng = draft.lng;
     var pics = draft.photos.slice(0, SHARED_PHOTO_MAX);
@@ -1597,7 +1836,7 @@ document.getElementById("fSave").addEventListener("click", function(){
     sbInsert({
       name: name.slice(0,80), work: fWork.value.trim().slice(0,120),
       addr: fAddr.value.trim().slice(0,200), memo: fMemo.value.trim().slice(0,1000),
-      lat: lat, lng: lng, author: nickname, edit_token: token, photos: urls
+      lat: lat, lng: lng, author: nickname, author_id: myUid, edit_token: token, photos: urls
     }, function(ok){
       saveBtn.textContent = "保存";
       if(!ok){ toast("登録できませんでした。通信状況をご確認ください"); return; }
@@ -1773,16 +2012,88 @@ cardsEl.addEventListener("click", function(e){
 });
 
 /* ================= 設定 ================= */
-function updateNickState(){
-  document.getElementById("nickState").textContent = nickname || "未設定";
+/* ---------------- プロフィール編集 ---------------- */
+var profNameInput = document.getElementById("profName");
+var profIconBox   = document.getElementById("profIcon");
+var avatarInput   = document.getElementById("avatarInput");
+var pendingIcon   = null;   // 保存前に選んだ画像（dataURL）
+
+function updateProfileUI(){
+  profNameInput.value = nickname || "";
+  var src = pendingIcon || safeAvatarUrl(profileIcon);
+  profIconBox.innerHTML = src
+    ? '<img class="avatar" src="'+esc(src)+'" alt="">'
+    : '<div class="avatar-ph">'+esc((nickname || "？").slice(0,1))+'</div>';
+  var st = document.getElementById("profState");
+  if(st) st.textContent = nickname
+    ? (profileIcon ? "設定済み（アイコンあり）" : "名前のみ設定済み")
+    : "未設定";
 }
-document.getElementById("btnNick").addEventListener("click", function(){
-  var n = prompt("みんなの聖地に登録するときの名前", nickname || "");
-  if(n === null) return;
-  nickname = (n || "").trim().slice(0,40);
-  localStorage.setItem(KEY_NICK, nickname);
-  updateNickState();
+profIconBox.addEventListener("click", function(){ avatarInput.click(); });
+profNameInput.addEventListener("input", function(){
+  if(!pendingIcon && !profileIcon) updateProfileUI();
 });
+avatarInput.addEventListener("change", function(e){
+  var f = (e.target.files || [])[0];
+  e.target.value = "";
+  if(!f) return;
+  compressSquare(f, 240, 0.7, function(d){
+    if(!d){ toast("画像を読み込めませんでした"); return; }
+    pendingIcon = d;
+    updateProfileUI();
+    toast("「保存」を押すと反映されます");
+  });
+});
+document.getElementById("btnProfSave").addEventListener("click", function(){
+  if(!hasServer()){ toast("共有サーバーが未設定です"); return; }
+  var name = (profNameInput.value || "").trim().slice(0,40);
+  if(!name){ toast("ニックネームを入力してください"); return; }
+  nickname = name;
+  localStorage.setItem(KEY_NICK, nickname);
+
+  function finish(icon){
+    sbSaveProfile(nickname, icon, function(ok){
+      if(!ok){ toast("保存できませんでした"); return; }
+      profileIcon = icon || "";
+      try{ localStorage.setItem(KEY_ICON, profileIcon); }catch(e){}
+      pendingIcon = null;
+      sbLoadProfiles(function(){
+        updateProfileUI(); renderList();
+        toast("プロフィールを保存しました");
+      });
+    });
+  }
+  if(pendingIcon){
+    toast("アイコンを送信中…");
+    sbUploadAvatar(pendingIcon, function(url){
+      if(!url){ toast("アイコンを送信できませんでした"); return; }
+      finish(url);
+    });
+  }else{
+    finish(profileIcon);
+  }
+});
+
+/* 正方形に切り抜いて縮小する（アイコン用） */
+function compressSquare(file, size, quality, cb){
+  var reader = new FileReader();
+  reader.onload = function(){
+    var img = new Image();
+    img.onload = function(){
+      var side = Math.min(img.width, img.height);
+      var sx = Math.round((img.width - side) / 2);
+      var sy = Math.round((img.height - side) / 2);
+      var cv = document.createElement("canvas");
+      cv.width = size; cv.height = size;
+      cv.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      cb(cv.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = function(){ cb(null); };
+    img.src = reader.result;
+  };
+  reader.onerror = function(){ cb(null); };
+  reader.readAsDataURL(file);
+}
 function updateAdminState(){
   var el = document.getElementById("adminState");
   if(el) el.textContent = adminKey
@@ -1867,7 +2178,7 @@ document.getElementById("btnReset").addEventListener("click", function(){
 /* ================= 起動 ================= */
 loadLocal();
 document.getElementById("verLabel").textContent = APP_VERSION;
-updateNickState();
+updateProfileUI();
 updateAdminState();
 renderStyleSheet();
 initMap();
@@ -1875,6 +2186,7 @@ if(!hasServer() && MODE === "shared") MODE = "personal";
 setMode(MODE, true);
 updateServerState();
 if(hasServer()){
+  sbLoadProfiles(function(){ closeSheet(); renderList(); });
   sbLoad(function(){
     renderMarkers(); renderList();
     if(MODE === "shared") fitAll();
