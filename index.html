@@ -359,7 +359,7 @@
     <div class="page" id="setPage">
       <div class="list-head">
         <h1>設定</h1>
-        <div style="font-size:11px;color:var(--sub);margin-top:4px;">バージョン <span id="verLabel">-</span></div>
+        <div id="verBox" style="font-size:11px;color:var(--sub);margin-top:4px;display:inline-block;padding:4px 2px;">バージョン <span id="verLabel">-</span></div>
       </div>
       <div class="set-sec">
         <div class="set-item" id="btnNick">
@@ -369,7 +369,7 @@
           <div><div>共有サーバー</div><small id="sbState">確認中…</small></div>
           <div class="go" id="btnReload">再読込</div>
         </div>
-        <div class="set-item" id="btnAdmin">
+        <div class="set-item" id="btnAdmin" style="display:none;">
           <div><div>管理キー</div><small id="adminState">未設定</small></div><div class="go">入力</div>
         </div>
       </div>
@@ -490,7 +490,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.006";
+var APP_VERSION = "1.007";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1788,7 +1788,27 @@ function updateAdminState(){
   if(el) el.textContent = adminKey
     ? "設定済み（すべての共有ピンを調整・削除できます）"
     : "未設定（自分が登録したピンのみ調整できます）";
+  // 管理キーが入っている端末では最初から表示する
+  if(adminKey) document.getElementById("btnAdmin").style.display = "flex";
 }
+
+/* 管理メニューは普段は隠しておき、設定画面のバージョン表示を5回タップで出す */
+(function(){
+  var taps = 0, timer = null;
+  var box = document.getElementById("verBox");
+  if(!box) return;
+  box.addEventListener("click", function(){
+    clearTimeout(timer);
+    taps++;
+    timer = setTimeout(function(){ taps = 0; }, 1500);
+    if(taps < 5) return;
+    taps = 0;
+    var row = document.getElementById("btnAdmin");
+    if(row.style.display === "flex"){ toast("管理メニューは表示中です"); return; }
+    row.style.display = "flex";
+    toast("管理メニューを表示しました");
+  });
+})();
 document.getElementById("btnAdmin").addEventListener("click", function(){
   var k = prompt("管理キーを入力（空にすると解除）", adminKey || "");
   if(k === null) return;
