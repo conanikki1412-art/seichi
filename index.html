@@ -145,7 +145,8 @@
   }
   .gallery::-webkit-scrollbar{display:none;}
   .gallery img{
-    flex:0 0 calc(100% - 36px);aspect-ratio:4/3;object-fit:cover;border-radius:14px;
+    flex:0 0 calc(100% - 36px);aspect-ratio:16/9;max-height:28vh;
+    object-fit:cover;border-radius:14px;
     scroll-snap-align:center;scroll-snap-stop:always;display:block;background:#eceff2;
   }
   .gal-count{
@@ -489,7 +490,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.002";
+var APP_VERSION = "1.003";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
