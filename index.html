@@ -134,6 +134,16 @@
   .pickrow .sname{flex:1;min-width:0;}
   .pickrow button{flex:none;background:var(--navy);color:#fff;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;}
   .pickrow button.added{background:#eceef3;color:#8a8a95;}
+  .chiprow{display:flex;flex-wrap:wrap;gap:8px;}
+  .chiprow button{
+    padding:9px 14px;border-radius:999px;border:1.5px solid var(--line);
+    background:#fafafb;font-size:14px;color:#555;
+  }
+  .chiprow button.on{border-color:var(--navy);background:#eaeef6;color:var(--navy);font-weight:700;}
+  .tag{
+    display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+    background:#eaeef6;color:var(--navy);border-radius:999px;padding:4px 10px;margin:8px 6px 0 0;
+  }
 
   .pin{width:32px;height:42px;cursor:pointer;line-height:0;}
   .pin svg{width:32px;height:42px;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
@@ -482,6 +492,14 @@
           <textarea id="cMemo" placeholder="まわる順番のコツ、所要時間、移動手段など" maxlength="1000"></textarea>
         </div>
         <div class="field">
+          <label>交通手段</label>
+          <div class="chiprow" id="cTransport"></div>
+        </div>
+        <div class="field">
+          <label>所要時間</label>
+          <input type="text" id="cDuration" placeholder="例：約3時間／半日" maxlength="30">
+        </div>
+        <div class="field">
           <label>まわる順番（2〜20か所）</label>
           <div id="cSteps"></div>
         </div>
@@ -647,7 +665,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.016";
+var APP_VERSION = "1.017";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2212,7 +2230,7 @@ function saveCourseTokens(){ try{ localStorage.setItem(KEY_COURSE, JSON.stringif
 
 function sbLoadCourses(cb){
   if(!hasServer()){ if(cb) cb(); return; }
-  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id"
+  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id,transport,duration"
         + "&order=created_at.desc&limit=200", { headers: sbHeaders() })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){ courses = rows || []; if(cb) cb(); })
@@ -2254,6 +2272,7 @@ function renderCourseList(){
       + '<h4>'+esc(c.title)+'</h4>'
       + '<div class="cmeta">' + avatarHtml(c.author_id, c.author)
       + '<span>'+esc(displayName(c.author_id, c.author))+' ・ '+names.length+'か所 ・ '+esc(timeAgo(c.created_at))+'</span></div>'
+      + courseTags(c)
       + (c.memo ? '<p>'+esc(c.memo)+'</p>' : '')
       + '<div class="chips">' + names.map(function(n,i){ return '<span>'+(i+1)+'. '+esc(n)+'</span>'; }).join("") + '</div>'
       + '</div>';
@@ -2298,6 +2317,7 @@ function showCourseSheet(){
     + '<div class="sheet-title"><h2>'+esc(c.title)+'</h2><button class="closeX" id="sClose">×</button></div>'
     + '<div class="byline">' + avatarHtml(c.author_id, c.author)
     + '<div><b>'+esc(displayName(c.author_id, c.author))+'</b><span> のコース　'+esc(timeAgo(c.created_at))+'</span></div></div>'
+    + courseTags(c)
     + (c.memo ? '<p class="memo">'+esc(c.memo)+'</p>' : '')
     + '</div>'
     + '<div class="sheet-pad">'
@@ -2337,14 +2357,36 @@ function showCourseSheet(){
 /* ---- コース作成 ---- */
 var coursePage2 = document.getElementById("coursePage2");
 var draftSteps = [];
+var TRANSPORTS = ["徒歩", "自転車", "車", "電車・バス", "その他"];
+var draftTransport = "";
+function renderTransport(){
+  var el = document.getElementById("cTransport");
+  el.innerHTML = TRANSPORTS.map(function(t){
+    return '<button data-t="'+esc(t)+'" class="'+(draftTransport===t?"on":"")+'">'+esc(t)+'</button>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("button"), function(b){
+    b.onclick = function(){
+      draftTransport = (draftTransport === b.dataset.t) ? "" : b.dataset.t;
+      renderTransport();
+    };
+  });
+}
+function courseTags(c){
+  var h = "";
+  if(c.transport) h += '<span class="tag">🚶 '+esc(c.transport)+'</span>';
+  if(c.duration)  h += '<span class="tag">🕒 '+esc(c.duration)+'</span>';
+  return h;
+}
 document.getElementById("btnNewCourse").addEventListener("click", function(){
   if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
   if(shared.length < 2){ toast("みんなの聖地が2か所以上必要です"); return; }
   draftSteps = [];
+  draftTransport = "";
   document.getElementById("cTitle").value = "";
   document.getElementById("cMemo").value = "";
+  document.getElementById("cDuration").value = "";
   document.getElementById("cSearch").value = "";
-  renderSteps(); renderPicker();
+  renderSteps(); renderPicker(); renderTransport();
   coursePage2.style.display = "flex";
   document.getElementById("nav").style.display = "none";
 });
@@ -2419,6 +2461,8 @@ document.getElementById("cSave").addEventListener("click", function(){
     title: title.slice(0,60),
     memo: (document.getElementById("cMemo").value || "").trim().slice(0,1000),
     spot_ids: draftSteps.slice(),
+    transport: draftTransport,
+    duration: (document.getElementById("cDuration").value || "").trim().slice(0,30),
     author: nickname, author_id: myUid, edit_token: token
   }, function(ok){
     btn.textContent = "投稿";
