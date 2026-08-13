@@ -490,7 +490,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.005";
+var APP_VERSION = "1.006";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -509,8 +509,10 @@ var KEY_ADMIN = "conan-seichi-admin";
 var KEY_DEVICE = "conan-seichi-device";
 var KEY_MYPHOTOS = "conan-seichi-myphotos";
 var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author,photos";
-var SHARED_PHOTO_MAX = 3;   // 共有モードの写真枚数の上限
+var SHARED_PHOTO_MAX = 10;  // 共有モードの写真枚数の上限（SQL側の上限と必ず揃えること）
 var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
+var PHOTO_MAX_PX = 900;     // 保存する画像の長辺
+var PHOTO_QUALITY = 0.6;    // JPEG品質
 
 function rasterStyle(tiles, attribution, maxzoom){
   return {
@@ -601,7 +603,8 @@ function safePhotoUrl(u){
   return "";
 }
 function safePhotos(arr){
-  return (Array.isArray(arr) ? arr : []).map(safePhotoUrl).filter(Boolean).slice(0, 6);
+  var cap = Math.max(SHARED_PHOTO_MAX, PERSONAL_PHOTO_MAX);
+  return (Array.isArray(arr) ? arr : []).map(safePhotoUrl).filter(Boolean).slice(0, cap);
 }
 
 var toastEl = document.getElementById("toast"), toastTimer;
@@ -683,6 +686,7 @@ function sbUploadAll(list, cb){
   var out = [], i = 0;
   (function next(){
     if(i >= list.length){ cb(out); return; }
+    if(list.length > 1) toast("写真を送信中… " + (i+1) + " / " + list.length);
     sbUpload(list[i++], function(url){ if(url) out.push(url); next(); });
   })();
 }
@@ -882,7 +886,9 @@ function openSheet(id){
 
   if(photos.length){
     h += '<div class="gal-wrap"><div class="gallery" id="gal">'
-       + photos.map(function(p){ return '<img src="'+esc(p)+'" alt="">'; }).join("")
+       + photos.map(function(p,i){
+           return '<img src="'+esc(p)+'" alt=""'+(i ? ' loading="lazy"' : '')+'>';
+         }).join("")
        + '</div>'
        + (photos.length>1 ? '<div class="gal-count" id="galCount">1 / '+photos.length+'</div>' : '')
        + '</div>';
@@ -1675,13 +1681,13 @@ function compress(file, cb){
   reader.onload = function(){
     var img = new Image();
     img.onload = function(){
-      var max = 1000, w = img.width, h = img.height;
+      var max = PHOTO_MAX_PX, w = img.width, h = img.height;
       if(w > h && w > max){ h = Math.round(h*max/w); w = max; }
       else if(h >= w && h > max){ w = Math.round(w*max/h); h = max; }
       var cv = document.createElement("canvas");
       cv.width = w; cv.height = h;
       cv.getContext("2d").drawImage(img, 0, 0, w, h);
-      cb(cv.toDataURL("image/jpeg", 0.68));
+      cb(cv.toDataURL("image/jpeg", PHOTO_QUALITY));
     };
     img.onerror = function(){ cb(null); };
     img.src = reader.result;
