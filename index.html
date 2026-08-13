@@ -144,6 +144,23 @@
     display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
     background:#eaeef6;color:var(--navy);border-radius:999px;padding:4px 10px;margin:8px 6px 0 0;
   }
+  /* 区間（聖地と聖地のあいだ） */
+  .leg{display:flex;align-items:center;gap:8px;padding:6px 0 6px 12px;position:relative;}
+  .leg::before{
+    content:"";position:absolute;left:12px;top:0;bottom:0;width:2px;
+    background:repeating-linear-gradient(to bottom,#d7263d 0 4px,transparent 4px 8px);
+  }
+  .leg .legin{display:flex;gap:8px;flex:1;margin-left:22px;}
+  .leg select,.leg input{
+    border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fafafb;
+    outline:none;font-size:14px;min-width:0;
+  }
+  .leg select{flex:0 0 42%;}
+  .leg input{flex:1;}
+  .leg-view{
+    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);
+    padding:4px 0 4px 13px;margin-left:12px;border-left:2px dashed var(--red);
+  }
 
   .pin{width:32px;height:42px;cursor:pointer;line-height:0;}
   .pin svg{width:32px;height:42px;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
@@ -492,15 +509,7 @@
           <textarea id="cMemo" placeholder="まわる順番のコツ、所要時間、移動手段など" maxlength="1000"></textarea>
         </div>
         <div class="field">
-          <label>交通手段</label>
-          <div class="chiprow" id="cTransport"></div>
-        </div>
-        <div class="field">
-          <label>所要時間</label>
-          <input type="text" id="cDuration" placeholder="例：約3時間／半日" maxlength="30">
-        </div>
-        <div class="field">
-          <label>まわる順番（2〜20か所）</label>
+          <label>まわる順番（2〜20か所）・区間ごとの移動手段</label>
           <div id="cSteps"></div>
         </div>
         <div class="field">
@@ -665,7 +674,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.017";
+var APP_VERSION = "1.018";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2230,7 +2239,7 @@ function saveCourseTokens(){ try{ localStorage.setItem(KEY_COURSE, JSON.stringif
 
 function sbLoadCourses(cb){
   if(!hasServer()){ if(cb) cb(); return; }
-  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id,transport,duration"
+  fetch(sbBase() + "/rest/v1/courses?select=id,created_at,title,memo,spot_ids,author,author_id,leg_transport,leg_time"
         + "&order=created_at.desc&limit=200", { headers: sbHeaders() })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){ courses = rows || []; if(cb) cb(); })
@@ -2322,8 +2331,13 @@ function showCourseSheet(){
     + '</div>'
     + '<div class="sheet-pad">'
     + list.map(function(s,i){
-        return '<div class="step" data-sid="'+esc(s.id)+'"><div class="no">'+(i+1)+'</div>'
-             + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")+'</span></div></div>';
+        var row = '<div class="step" data-sid="'+esc(s.id)+'"><div class="no">'+(i+1)+'</div>'
+                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")+'</span></div></div>';
+        if(i < list.length - 1){
+          var lt = legText(c, i);
+          row += '<div class="leg-view">' + (lt ? esc(lt) : "移動手段の記載なし") + '</div>';
+        }
+        return row;
       }).join("")
     + '</div>'
     + '<div class="sheet-actions">'
@@ -2357,36 +2371,31 @@ function showCourseSheet(){
 /* ---- コース作成 ---- */
 var coursePage2 = document.getElementById("coursePage2");
 var draftSteps = [];
-var TRANSPORTS = ["徒歩", "自転車", "車", "電車・バス", "その他"];
-var draftTransport = "";
-function renderTransport(){
-  var el = document.getElementById("cTransport");
-  el.innerHTML = TRANSPORTS.map(function(t){
-    return '<button data-t="'+esc(t)+'" class="'+(draftTransport===t?"on":"")+'">'+esc(t)+'</button>';
-  }).join("");
-  Array.prototype.forEach.call(el.querySelectorAll("button"), function(b){
-    b.onclick = function(){
-      draftTransport = (draftTransport === b.dataset.t) ? "" : b.dataset.t;
-      renderTransport();
-    };
-  });
-}
+var TRANSPORTS = ["徒歩", "自転車", "車", "電車", "バス", "タクシー", "その他"];
+var draftLegT = [], draftLegM = [];   // 区間ごとの移動手段・所要時間
+
+/* コース全体で使われている移動手段をまとめて出す */
 function courseTags(c){
-  var h = "";
-  if(c.transport) h += '<span class="tag">🚶 '+esc(c.transport)+'</span>';
-  if(c.duration)  h += '<span class="tag">🕒 '+esc(c.duration)+'</span>';
-  return h;
+  var t = (c.leg_transport || []).filter(Boolean);
+  if(!t.length) return "";
+  var seen = {}, uniq = [];
+  t.forEach(function(x){ if(!seen[x]){ seen[x] = 1; uniq.push(x); } });
+  return uniq.map(function(x){ return '<span class="tag">'+esc(x)+'</span>'; }).join("");
+}
+function legText(c, i){
+  var t = (c.leg_transport || [])[i] || "";
+  var m = (c.leg_time || [])[i] || "";
+  if(!t && !m) return "";
+  return [t, m].filter(Boolean).join(" ");
 }
 document.getElementById("btnNewCourse").addEventListener("click", function(){
   if(!hasServer()){ toast("みんなの聖地につながっていません"); return; }
   if(shared.length < 2){ toast("みんなの聖地が2か所以上必要です"); return; }
-  draftSteps = [];
-  draftTransport = "";
+  draftSteps = []; draftLegT = []; draftLegM = [];
   document.getElementById("cTitle").value = "";
   document.getElementById("cMemo").value = "";
-  document.getElementById("cDuration").value = "";
   document.getElementById("cSearch").value = "";
-  renderSteps(); renderPicker(); renderTransport();
+  renderSteps(); renderPicker();
   coursePage2.style.display = "flex";
   document.getElementById("nav").style.display = "none";
 });
@@ -2400,22 +2409,50 @@ function renderSteps(){
     el.innerHTML = '<p class="hint" style="margin:0;">下の一覧から、まわりたい順にタップして追加してください</p>';
     return;
   }
-  el.innerHTML = draftSteps.map(function(id,i){
+  var h = "";
+  draftSteps.forEach(function(id,i){
     var s = spotById(id);
-    return '<div class="step"><div class="no">'+(i+1)+'</div>'
+    h += '<div class="step"><div class="no">'+(i+1)+'</div>'
       + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? (s.work||"作品未設定") : "")+'</span></div>'
       + '<div class="ops">'
       + '<button data-up="'+i+'">↑</button><button data-down="'+i+'">↓</button><button data-del="'+i+'">×</button>'
       + '</div></div>';
-  }).join("");
-  Array.prototype.forEach.call(el.querySelectorAll("button"), function(b){
+    if(i < draftSteps.length - 1){
+      h += '<div class="leg"><div class="legin">'
+        + '<select data-legt="'+i+'"><option value="">移動手段</option>'
+        + TRANSPORTS.map(function(t){
+            return '<option value="'+esc(t)+'"'+(draftLegT[i]===t?" selected":"")+'>'+esc(t)+'</option>';
+          }).join("")
+        + '</select>'
+        + '<input type="text" data-legm="'+i+'" placeholder="所要時間（例：15分）" maxlength="20" value="'+esc(draftLegM[i]||"")+'">'
+        + '</div></div>';
+    }
+  });
+  el.innerHTML = h;
+
+  Array.prototype.forEach.call(el.querySelectorAll(".ops button"), function(b){
     b.onclick = function(){
       var i;
-      if(b.dataset.up !== undefined){ i = +b.dataset.up; if(i>0){ var t=draftSteps[i-1]; draftSteps[i-1]=draftSteps[i]; draftSteps[i]=t; } }
-      else if(b.dataset.down !== undefined){ i = +b.dataset.down; if(i<draftSteps.length-1){ var t2=draftSteps[i+1]; draftSteps[i+1]=draftSteps[i]; draftSteps[i]=t2; } }
-      else { draftSteps.splice(+b.dataset.del, 1); }
+      if(b.dataset.up !== undefined){
+        i = +b.dataset.up;
+        if(i>0){ var t=draftSteps[i-1]; draftSteps[i-1]=draftSteps[i]; draftSteps[i]=t; }
+      }else if(b.dataset.down !== undefined){
+        i = +b.dataset.down;
+        if(i<draftSteps.length-1){ var t2=draftSteps[i+1]; draftSteps[i+1]=draftSteps[i]; draftSteps[i]=t2; }
+      }else{
+        i = +b.dataset.del;
+        draftSteps.splice(i, 1);
+        var li = Math.min(i, draftSteps.length - 1);
+        if(li >= 0){ draftLegT.splice(li, 1); draftLegM.splice(li, 1); }
+      }
       renderSteps(); renderPicker();
     };
+  });
+  Array.prototype.forEach.call(el.querySelectorAll("select[data-legt]"), function(sel){
+    sel.onchange = function(){ draftLegT[+sel.dataset.legt] = sel.value; };
+  });
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-legm]"), function(inp){
+    inp.oninput = function(){ draftLegM[+inp.dataset.legm] = inp.value; };
   });
 }
 function renderPicker(){
@@ -2461,8 +2498,8 @@ document.getElementById("cSave").addEventListener("click", function(){
     title: title.slice(0,60),
     memo: (document.getElementById("cMemo").value || "").trim().slice(0,1000),
     spot_ids: draftSteps.slice(),
-    transport: draftTransport,
-    duration: (document.getElementById("cDuration").value || "").trim().slice(0,30),
+    leg_transport: draftLegT.slice(0, Math.max(0, draftSteps.length - 1)).map(function(x){ return (x||"").slice(0,20); }),
+    leg_time:      draftLegM.slice(0, Math.max(0, draftSteps.length - 1)).map(function(x){ return (x||"").slice(0,20); }),
     author: nickname, author_id: myUid, edit_token: token
   }, function(ok){
     btn.textContent = "投稿";
