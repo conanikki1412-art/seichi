@@ -133,12 +133,24 @@
   }
   #sheet .grip{width:40px;height:4px;border-radius:2px;background:#d5d5db;margin:8px auto 0;flex:none;}
   #sheetBody{overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(20px + var(--safe-b));}
-  .hero{width:100%;aspect-ratio:16/9;object-fit:cover;background:#eceff2;display:block;}
-  .hero-wrap{position:relative;}
-  .hero-count{
-    position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.6);color:#fff;
-    border-radius:8px;padding:5px 10px;font-size:12px;
+  /* 写真ギャラリー（横スワイプ） */
+  .gal-wrap{position:relative;}
+  .gallery{
+    display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;background:#eceff2;
   }
+  .gallery::-webkit-scrollbar{display:none;}
+  .gallery img{
+    width:100%;flex:0 0 100%;aspect-ratio:16/9;object-fit:cover;
+    scroll-snap-align:center;display:block;background:#eceff2;
+  }
+  .gal-count{
+    position:absolute;right:12px;top:12px;background:rgba(0,0,0,.6);color:#fff;
+    border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700;pointer-events:none;
+  }
+  .dots{display:flex;justify-content:center;align-items:center;gap:6px;padding:10px 0 0;}
+  .dots i{width:6px;height:6px;border-radius:3px;background:#d5d5db;display:block;transition:.2s;}
+  .dots i.on{background:var(--red);width:18px;}
   .sheet-pad{padding:16px 18px 0;}
   .sheet-title{display:flex;align-items:flex-start;gap:10px;}
   .sheet-title h2{margin:0;font-size:22px;font-weight:800;flex:1;line-height:1.3;}
@@ -207,6 +219,10 @@
     width:82px;height:82px;border-radius:10px;border:1.5px dashed #ccc;color:#999;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;background:#fafafb;
   }
+  .visit-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .visit-row span{font-size:12px;color:var(--sub);width:52px;flex:none;font-weight:700;}
+  .visit-row input{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fafafb;outline:none;}
+  .visit-row button{width:32px;height:32px;border-radius:50%;background:#f1f1f4;color:#8a8a95;flex:none;font-size:15px;}
   .coord{font-size:12px;color:var(--sub);}
   .pickmap{width:100%;padding:11px;border-radius:12px;background:#f2f3f6;font-size:13px;font-weight:700;color:var(--navy);margin-top:6px;}
   .hint{font-size:11px;color:var(--sub);margin:-8px 0 16px;line-height:1.7;}
@@ -426,9 +442,10 @@
             <div class="sw" id="fSw"></div>
           </div>
         </div>
-        <div class="field" id="fDateField" style="display:none;">
+        <div class="field" id="fVisitsField" style="display:none;">
           <label>訪問日</label>
-          <input type="date" id="fDate">
+          <div id="fVisits"></div>
+          <button class="pickmap" id="fAddVisit">＋ 訪問日を追加</button>
         </div>
         <div class="field">
           <label>位置</label>
@@ -467,8 +484,8 @@
    共有サーバー（Supabase）の設定
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
-/* 更新のたびにこの日付を変えると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "2026-08-13-c";
+/* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
+var APP_VERSION = "1.000";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -533,6 +550,7 @@ function currentList(){ return MODE === "shared" ? shared : personal; }
 function loadLocal(){
   try{ personal = JSON.parse(localStorage.getItem(KEY_SPOTS) || "[]"); }catch(e){ personal = []; }
   if(!Array.isArray(personal)) personal = [];
+  personal.forEach(migrateVisits);
   try{ myTokens = JSON.parse(localStorage.getItem(KEY_TOKEN) || "{}"); }catch(e){ myTokens = {}; }
   if(!myTokens || typeof myTokens !== "object") myTokens = {};
 }
@@ -541,6 +559,24 @@ function saveLocal(){
   catch(e){ toast("保存できませんでした。写真の枚数を減らしてみてください"); return false; }
 }
 function saveTokens(){ try{ localStorage.setItem(KEY_TOKEN, JSON.stringify(myTokens)); }catch(e){} }
+/* 訪問履歴：visits は ["2026-08-13", "2026-09-01", ...]（昇順）。
+   古いデータ（date だけ持つもの）を自動で移行する */
+function uniqSorted(arr){
+  return (arr || []).filter(Boolean).sort()
+    .filter(function(d,i,a){ return i === 0 || d !== a[i-1]; });
+}
+function migrateVisits(s){
+  if(!s) return s;
+  if(!Array.isArray(s.visits)) s.visits = s.date ? [s.date] : [];
+  s.visits = uniqSorted(s.visits);
+  s.visited = s.visits.length > 0;
+  s.date = s.visits[0] || "";
+  return s;
+}
+function visitLabel(i){ return i === 0 ? "初回" : (i+1) + "回目"; }
+function today(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(d){ return String(d||"").replace(/-/g, "/"); }
+
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function randToken(){ return uid() + uid() + Math.random().toString(36).slice(2,9); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
@@ -784,8 +820,16 @@ function openSheet(id){
   var h = "";
 
   if(photos.length){
-    h += '<div class="hero-wrap"><img class="hero" src="'+photos[0]+'" alt="">'
-       + (photos.length>1 ? '<div class="hero-count">写真 '+photos.length+'枚</div>' : '') + '</div>';
+    h += '<div class="gal-wrap"><div class="gallery" id="gal">'
+       + photos.map(function(p){ return '<img src="'+p+'" alt="">'; }).join("")
+       + '</div>'
+       + (photos.length>1 ? '<div class="gal-count" id="galCount">1 / '+photos.length+'</div>' : '')
+       + '</div>';
+    if(photos.length>1){
+      h += '<div class="dots" id="galDots">'
+         + photos.map(function(_,i){ return '<i class="'+(i===0?"on":"")+'"></i>'; }).join("")
+         + '</div>';
+    }
   }
   h += '<div class="sheet-pad">';
   h += '<div class="sheet-title"><h2>'+esc(s.name)+'</h2><button class="closeX" id="sClose">×</button></div>';
@@ -797,10 +841,16 @@ function openSheet(id){
       ? '<span class="badge on">✓ 自分の記録に追加済み</span>'
       : '<span class="badge share">みんなの聖地</span>';
   }else{
-    h += s.visited
-      ? '<span class="badge on">✓ 訪問済み'+(s.date? '・'+esc(s.date.replace(/-/g,"/")) : '')+'</span>'
+    migrateVisits(s);
+    h += s.visits.length
+      ? '<span class="badge on">✓ 訪問済み・'+s.visits.length+'回</span>'
       : '<span class="badge off">未訪問</span>';
     if(s.fromShared) h += ' <span class="badge share">みんなの聖地から</span>';
+    if(s.visits.length){
+      h += '<p class="meta" style="margin-top:10px;">'
+         + s.visits.map(function(d,i){ return visitLabel(i)+' '+esc(fmtDate(d)); }).join('　／　')
+         + '</p>';
+    }
   }
   if(s.memo) h += '<p class="memo">'+esc(s.memo)+'</p>';
   h += '<p class="meta">';
@@ -820,10 +870,6 @@ function openSheet(id){
       h += '<button class="photo-add" id="sAddPhoto"><span style="font-size:20px;">＋</span>写真</button>';
     }
     h += '</div>';
-  }else if(photos.length>1){
-    h += '<div class="thumbs">';
-    photos.slice(1).forEach(function(p){ h += '<img src="'+p+'" alt="">'; });
-    h += '</div>';
   }
 
   h += '<div class="sheet-actions">';
@@ -836,8 +882,8 @@ function openSheet(id){
       h += '<button class="act-del" id="sDelShared">🗑</button>';
     }
   }else{
-    h += '<button class="'+(s.visited?'act-unvisit':'act-visit')+'" id="sVisit">'
-       + (s.visited?'未訪問に戻す':'訪問済みにする')+'</button>';
+    h += '<button class="act-visit" id="sVisit">'
+       + (s.visits.length ? 'また訪問した（'+(s.visits.length+1)+'回目）' : '訪問済みにする')+'</button>';
     h += '<button class="act-edit" id="sEdit">編集</button>';
     h += '<button class="act-edit" id="sMove">位置を微調整</button>';
     h += '<button class="act-del" id="sDel">🗑</button>';
@@ -849,6 +895,27 @@ function openSheet(id){
   sheet.style.display = "flex";
   sheetMask.style.display = "block";
   document.getElementById("sClose").onclick = closeSheet;
+
+  // 写真ギャラリーのページ表示
+  var gal = document.getElementById("gal");
+  if(gal && photos.length > 1){
+    var dots = document.getElementById("galDots");
+    var cnt  = document.getElementById("galCount");
+    var ticking = false;
+    gal.addEventListener("scroll", function(){
+      if(ticking) return;
+      ticking = true;
+      requestAnimationFrame(function(){
+        ticking = false;
+        var w = gal.clientWidth || 1;
+        var i = Math.min(photos.length - 1, Math.max(0, Math.round(gal.scrollLeft / w)));
+        if(cnt) cnt.textContent = (i+1) + " / " + photos.length;
+        if(dots) Array.prototype.forEach.call(dots.children, function(el, j){
+          el.classList.toggle("on", j === i);
+        });
+      });
+    }, { passive:true });
+  }
 
   var mv = document.getElementById("sMove");
   if(mv) mv.onclick = function(){ startMove(s); };
@@ -886,10 +953,15 @@ function openSheet(id){
     };
   }else{
     document.getElementById("sVisit").onclick = function(){
-      s.visited = !s.visited;
-      if(s.visited && !s.date) s.date = new Date().toISOString().slice(0,10);
-      saveLocal(); renderMarkers(); openSheet(id);
-      toast(s.visited ? "訪問済みにしました" : "未訪問に戻しました");
+      var t = today();
+      if(s.visits.indexOf(t) >= 0){
+        toast("今日の訪問はすでに記録されています");
+        return;
+      }
+      s.visits.push(t);
+      migrateVisits(s);
+      saveLocal(); renderMarkers(); renderList(); openSheet(id);
+      toast(s.visits.length === 1 ? "訪問済みにしました" : s.visits.length + "回目の訪問を記録しました");
     };
     document.getElementById("sEdit").onclick = function(){ closeSheet(); openForm(id); };
     document.getElementById("sDel").onclick = function(){
@@ -952,7 +1024,7 @@ function copyToPersonal(s){
   var rec = {
     id: uid(), created: Date.now(), fromShared: s.id,
     name: s.name, work: s.work || "", addr: s.addr || "", memo: s.memo || "",
-    visited: false, date: "", lat: s.lat, lng: s.lng, photos: []
+    visited: false, date: "", visits: [], lat: s.lat, lng: s.lng, photos: []
   };
   personal.push(rec);
   if(!saveLocal()) return;
@@ -1246,7 +1318,6 @@ var fName = document.getElementById("fName"),
     fAddr = document.getElementById("fAddr"),
     fMemo = document.getElementById("fMemo"),
     fAuthor = document.getElementById("fAuthor"),
-    fDate = document.getElementById("fDate"),
     fSw   = document.getElementById("fSw"),
     fPhotosEl = document.getElementById("fPhotos"),
     fPhotoInput = document.getElementById("fPhotoInput");
@@ -1262,7 +1333,7 @@ function setDest(d){
     isShared ? "写真（" + SHARED_PHOTO_MAX + "枚まで・全員に公開されます）"
              : "写真（" + PERSONAL_PHOTO_MAX + "枚まで）";
   document.getElementById("fVisitField").style.display  = isShared ? "none" : "block";
-  document.getElementById("fDateField").style.display   = (!isShared && draft && draft.visited) ? "block" : "none";
+  document.getElementById("fVisitsField").style.display  = (!isShared && draft && draft.visits && draft.visits.length) ? "block" : "none";
   document.getElementById("fMemoLabel").textContent = isShared ? "メモ（どのシーンの場所か）" : "メモ・感想";
   fMemo.placeholder = isShared ? "どの作品のどんなシーンに出てくるかを書くと親切です" : "行ってみた感想など";
 }
@@ -1278,19 +1349,20 @@ function openForm(id, lat, lng){
   if(id){
     var s = personal.filter(function(x){ return x.id===id; })[0];
     if(!s) return;
-    draft = { lat:s.lat, lng:s.lng, photos:(s.photos||[]).slice(), addrAuto:!s.addr };
+    migrateVisits(s);
+    draft = { lat:s.lat, lng:s.lng, photos:(s.photos||[]).slice(),
+              visits:s.visits.slice(), addrAuto:!s.addr };
     fName.value = s.name || ""; fWork.value = s.work || ""; fAddr.value = s.addr || "";
-    fMemo.value = s.memo || ""; fDate.value = s.date || "";
-    setVisited(!!s.visited);
+    fMemo.value = s.memo || "";
+    setVisited(s.visits.length > 0);
     document.getElementById("fDestField").style.display = "none";
     setDest("personal");
     document.getElementById("fTitle").textContent = "記録を編集";
     if(!s.addr) fillAddress();
   }else{
-    draft = { lat:lat, lng:lng, photos:[], addrAuto:true };
+    draft = { lat:lat, lng:lng, photos:[], visits:[], addrAuto:true };
     fName.value = ""; fWork.value = ""; fMemo.value = ""; fAddr.value = "";
     fAuthor.value = nickname;
-    fDate.value = new Date().toISOString().slice(0,10);
     setVisited(true);
     document.getElementById("fDestField").style.display = hasServer() ? "block" : "none";
     setDest(hasServer() ? MODE : "personal");
@@ -1315,10 +1387,40 @@ function fillAddress(){
 }
 fAddr.addEventListener("input", function(){ if(draft) draft.addrAuto = false; });
 function setVisited(v){
-  if(draft) draft.visited = v;
+  if(!draft) return;
+  draft.visited = v;
+  if(v && !draft.visits.length) draft.visits = [today()];
+  if(!v) draft.visits = [];
   fSw.classList.toggle("on", v);
-  document.getElementById("fDateField").style.display = (v && dest !== "shared") ? "block" : "none";
+  document.getElementById("fVisitsField").style.display = (v && dest !== "shared") ? "block" : "none";
+  renderVisits();
 }
+function renderVisits(){
+  var el = document.getElementById("fVisits");
+  if(!el || !draft) return;
+  el.innerHTML = (draft.visits || []).map(function(d,i){
+    return '<div class="visit-row"><span>'+visitLabel(i)+'</span>'
+         + '<input type="date" data-i="'+i+'" value="'+esc(d)+'">'
+         + '<button data-del="'+i+'" aria-label="削除">×</button></div>';
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("input[data-i]"), function(inp){
+    inp.onchange = function(){ draft.visits[+inp.dataset.i] = inp.value; };
+  });
+  Array.prototype.forEach.call(el.querySelectorAll("button[data-del]"), function(b){
+    b.onclick = function(){
+      draft.visits.splice(+b.dataset.del, 1);
+      if(!draft.visits.length){ setVisited(false); return; }
+      renderVisits();
+    };
+  });
+}
+document.getElementById("fAddVisit").addEventListener("click", function(){
+  if(!draft) return;
+  var dup = draft.visits.indexOf(today()) >= 0;
+  draft.visits.push(today());
+  renderVisits();
+  if(dup) toast("同じ日付があります。日付を変更してください");
+});
 document.getElementById("fVisitToggle").addEventListener("click", function(){ setVisited(!draft.visited); });
 document.getElementById("fCancel").addEventListener("click", function(){
   formPage.style.display = "none"; draft = null; editingId = null; chrome();
@@ -1375,9 +1477,10 @@ document.getElementById("fSave").addEventListener("click", function(){
     return;
   }
 
+  var visits = uniqSorted(draft.visits);
   var data = {
     name:name, work:fWork.value.trim(), addr:fAddr.value.trim(), memo:fMemo.value.trim(),
-    visited: !!draft.visited, date: draft.visited ? fDate.value : "",
+    visits: visits, visited: visits.length > 0, date: visits[0] || "",
     lat: draft.lat, lng: draft.lng, photos: draft.photos.slice()
   };
   if(editingId){
@@ -1507,9 +1610,10 @@ function renderList(){
         : '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author||"名無し")+'</span>';
       sub = s.work || s.addr || "作品未設定";
     }else{
+      migrateVisits(s);
       th = (s.photos && s.photos[0]) ? '<img class="thumb" loading="lazy" src="'+s.photos[0]+'">' : '<div class="thumb ph">📍</div>';
       badge = s.visited
-        ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ 訪問済み'+(s.date? ' '+esc(s.date.replace(/-/g,"/")) : '')+'</span>'
+        ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ '+s.visits.length+'回訪問'+(s.date? ' ・初回 '+esc(fmtDate(s.date)) : '')+'</span>'
         : '<span class="b" style="background:#f1f1f4;color:#8a8a95;">未訪問</span>';
       sub = s.work || s.addr || "作品未設定";
     }
@@ -1581,7 +1685,7 @@ document.getElementById("importInput").addEventListener("change", function(e){
       arr.forEach(function(s){
         if(!s || typeof s.lat!=="number" || typeof s.lng!=="number") return;
         if(!s.id || have[s.id]) s.id = uid();
-        personal.push(s); n++;
+        personal.push(migrateVisits(s)); n++;
       });
       saveLocal(); setMode("personal", true); renderMarkers(); renderList(); fitAll();
       toast(n + "件を読み込みました");
