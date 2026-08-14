@@ -740,7 +740,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.030";
+var APP_VERSION = "1.031";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -831,6 +831,40 @@ function workText(w){
   var p = splitWork(w);
   return p.title ? p.cat + " " + p.title : p.cat;
 }
+/* 劇場版は公開順に並べる */
+var MOVIE_ORDER = [
+  "時計じかけの摩天楼","14番目の標的","世紀末の魔術師","瞳の中の暗殺者","天国へのカウントダウン",
+  "ベイカー街の亡霊","迷宮の十字路","銀翼の奇術師","水平線上の陰謀","探偵たちの鎮魂歌",
+  "紺碧の棺","戦慄の楽譜","漆黒の追跡者","天空の難破船","沈黙の15分",
+  "11人目のストライカー","絶海の探偵","異次元の狙撃手","業火の向日葵","純黒の悪夢",
+  "から紅の恋歌","ゼロの執行人","紺青の拳","緋色の弾丸","ハロウィンの花嫁",
+  "黒鉄の魚影","100万ドルの五稜星","隻眼の残像","ハイウェイの堕天使"
+];
+function normTitle(t){
+  return String(t||"").replace(/[『』「」\s　]/g, "")
+    .replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+}
+function movieRank(title){
+  var t = normTitle(title);
+  if(!t) return 999;
+  for(var i=0;i<MOVIE_ORDER.length;i++){
+    var m = normTitle(MOVIE_ORDER[i]);
+    if(t === m || t.indexOf(m) >= 0) return i;
+  }
+  return 999;
+}
+/* カテゴリごとの並び順 */
+function sortTitles(cat, arr, keyFn){
+  var key = keyFn || function(x){ return x; };
+  return arr.slice().sort(function(a,b){
+    var ta = key(a), tb = key(b);
+    if(cat === "劇場版"){
+      var ra = movieRank(ta), rb = movieRank(tb);
+      if(ra !== rb) return ra - rb;
+    }
+    return String(ta).localeCompare(String(tb), "ja", { numeric:true });
+  });
+}
 function catOrder(c){
   var i = CATEGORIES.indexOf(c);
   return i < 0 ? 99 : i;
@@ -903,9 +937,8 @@ function workTree(){
   });
   return Object.keys(m).sort(function(a,b){ return catOrder(a)-catOrder(b) || a.localeCompare(b,"ja"); })
     .map(function(c){
-      var items = Object.keys(m[c].items).sort(function(a,b){
-        return a.localeCompare(b, "ja", { numeric:true });
-      }).map(function(w){ return { name:w, title:splitWork(w).title, n:m[c].items[w] }; });
+      var items = sortTitles(c, Object.keys(m[c].items), function(w){ return splitWork(w).title; })
+        .map(function(w){ return { name:w, title:splitWork(w).title, n:m[c].items[w] }; });
       return { cat:c, n:m[c].n, items:items };
     });
 }
@@ -2234,7 +2267,7 @@ function renderWorksPicker(){
   draft.works.forEach(function(w){
     if(splitWork(w).cat === formCat && splitWork(w).title && names.indexOf(w) < 0) names.unshift(w);
   });
-  names.sort(function(a,b){ return a.localeCompare(b, "ja", { numeric:true }); });
+  names = sortTitles(formCat, names, function(w){ return splitWork(w).title; });
 
   var box = document.getElementById("fWorksList");
   var h = '<button data-w="'+esc(formCat)+'" class="'+(draft.works.indexOf(formCat)>=0?"on":"")+'">'
