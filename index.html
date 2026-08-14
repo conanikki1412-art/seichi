@@ -148,6 +148,20 @@
     width:20px;height:20px;border-radius:50%;background:rgba(27,42,73,.15);color:var(--navy);font-size:12px;
   }
   .worksel .none{color:var(--sub);font-size:13px;font-weight:400;background:none;padding:0;}
+  .sublabel{
+    font-size:11px;font-weight:700;color:var(--sub);margin:14px 0 7px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .sublabel::after{content:"";flex:1;height:1px;background:var(--line);}
+  .catrow{display:flex;flex-wrap:wrap;gap:8px;}
+  .catrow button{
+    padding:12px 17px;border-radius:12px;border:1.5px solid var(--line);
+    background:#fafafb;font-size:15px;font-weight:700;color:#666;
+  }
+  .catrow button.on{
+    background:var(--navy);border-color:var(--navy);color:#fff;
+    box-shadow:0 2px 8px rgba(27,42,73,.25);
+  }
   .worklist{display:flex;flex-wrap:wrap;gap:7px;max-height:32vh;overflow-y:auto;}
   .worklist button{
     padding:8px 13px;border-radius:999px;border:1px solid var(--line);
@@ -644,7 +658,9 @@
         <div class="field">
           <label>作品（5つまで選べます）</label>
           <div id="fWorksSel"></div>
-          <div id="fCatRow" class="chiprow" style="margin-bottom:10px;"></div>
+          <div class="sublabel">① カテゴリを選ぶ</div>
+          <div id="fCatRow" class="catrow"></div>
+          <div class="sublabel" id="fTitleLabel">② タイトルを選ぶ</div>
           <div id="fWorksList" class="worklist"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
             <input type="text" id="fWorkNew" placeholder="一覧にないタイトルを追加" maxlength="60" style="flex:1;">
@@ -724,7 +740,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.029";
+var APP_VERSION = "1.030";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2232,6 +2248,8 @@ function renderWorksPicker(){
     b.onclick = function(){ toggleWork(b.dataset.w); };
   });
 
+  var tl = document.getElementById("fTitleLabel");
+  if(tl) tl.textContent = "② 「" + formCat + "」のタイトルを選ぶ";
   document.getElementById("fWorkNew").placeholder =
     formCat === "単行本" ? "例：86巻 県警の黒い闇／105-106巻 …" :
     formCat === "劇場版" ? "例：緋色の弾丸" :
