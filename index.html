@@ -218,7 +218,7 @@
 
   /* 写真ピン（拡大したときだけ出る） */
   .photo-pin{
-    width:46px;height:55px;position:relative;cursor:pointer;color:#ffffff;
+    width:46px;height:56px;position:relative;cursor:pointer;color:#ffffff;
     filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));
   }
   .photo-pin .pp-img{
@@ -788,7 +788,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.036";
+var APP_VERSION = "1.037";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1325,16 +1325,19 @@ function fitAll(){
   map.fitBounds(b, { padding:80, maxZoom:14, duration:0 });
 }
 var PIN_PATH = "M16 1.6c-7.1 0-12.9 5.8-12.9 12.9 0 3.5 1.6 7.4 4 11.2 2.4 3.8 5.4 7.3 7.6 9.6.7.8 1.9.8 2.6 0 2.2-2.3 5.2-5.8 7.6-9.6 2.4-3.8 4-7.7 4-11.2C28.9 7.4 23.1 1.6 16 1.6z";
-function pinEl(kind){
+function pinSvg(kind){
   var fill, stroke, dot;
   if(kind === "visited" || kind === "added"){ fill="#d7263d"; stroke="#ffffff"; dot="#ffffff"; }
   else if(kind === "shared"){ fill="#1b2a49"; stroke="#ffffff"; dot="#ffffff"; }
   else { fill="#ffffff"; stroke="#d7263d"; dot="#d7263d"; }
-  var el = document.createElement("div");
-  el.className = "pin";
-  el.innerHTML = '<svg viewBox="0 0 32 42">'
+  return '<svg viewBox="0 0 32 42">'
     + '<path d="'+PIN_PATH+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2.4" stroke-linejoin="round"/>'
     + '<circle cx="16" cy="14.5" r="5" fill="'+dot+'"/></svg>';
+}
+function pinEl(kind){
+  var el = document.createElement("div");
+  el.className = "pin";
+  el.innerHTML = pinSvg(kind);
   return el;
 }
 /* 共有スポットを編集できるか（自分が登録した／管理キーを持っている） */
@@ -1427,12 +1430,22 @@ function ringClass(s){
   if(MODE === "shared") return alreadyCopied(s.id) ? "ring-red" : "ring-navy";
   return s.visited ? "ring-red" : "";
 }
-function photoPinEl(s){
-  var url = safePhotoUrl((s.photos || [])[0]);
-  var el = document.createElement("div");
-  el.className = "photo-pin " + ringClass(s);
-  el.innerHTML = '<div class="pp-img"><img src="'+esc(url)+'" alt=""></div>';
-  return el;
+function pinKindOf(s){
+  return MODE === "shared"
+    ? (alreadyCopied(s.id) ? "added" : "shared")
+    : (s.visited ? "visited" : "todo");
+}
+/* マーカーの要素は作り直さず、中身だけ差し替える
+   （作り直すと MapLibre が付けた位置の指定が外れてピンがずれる） */
+function applyMarkerLook(el, s, look){
+  if(look === "photo"){
+    var url = safePhotoUrl((s.photos || [])[0]);
+    el.className = "photo-pin " + ringClass(s);
+    el.innerHTML = '<div class="pp-img"><img src="'+esc(url)+'" alt=""></div>';
+  }else{
+    el.className = "pin";
+    el.innerHTML = pinSvg(pinKindOf(s));
+  }
 }
 function wantPhoto(s){
   if(courseView) return false;
@@ -1450,18 +1463,7 @@ function updatePinLooks(){
     var want = wantPhoto(s) && shown < PHOTO_MAX_ON_SCREEN ? "photo" : "pin";
     if(want === "photo") shown++;
     if(markerLook[id] === want) return;
-    var el;
-    if(want === "photo"){ el = photoPinEl(s); }
-    else{
-      var kind = MODE === "shared"
-        ? (alreadyCopied(s.id) ? "added" : "shared")
-        : (s.visited ? "visited" : "todo");
-      el = pinEl(kind);
-    }
-    el.addEventListener("click", function(ev){ ev.stopPropagation(); openSheet(s.id); });
-    var old = markers[id].getElement();
-    old.parentNode.replaceChild(el, old);
-    markers[id]._element = el;
+    applyMarkerLook(markers[id].getElement(), s, want);
     markerLook[id] = want;
   });
 }
@@ -1523,14 +1525,10 @@ function renderMarkers(){
   }else{
     var photoShown = 0;
     list.forEach(function(s){
-      var el, look = "pin";
-      if(wantPhoto(s) && photoShown < PHOTO_MAX_ON_SCREEN){ el = photoPinEl(s); look = "photo"; photoShown++; }
-      else{
-        var kind = MODE === "shared"
-          ? (alreadyCopied(s.id) ? "added" : "shared")
-          : (s.visited ? "visited" : "todo");
-        el = pinEl(kind);
-      }
+      var look = "pin";
+      if(wantPhoto(s) && photoShown < PHOTO_MAX_ON_SCREEN){ look = "photo"; photoShown++; }
+      var el = document.createElement("div");
+      applyMarkerLook(el, s, look);
       el.addEventListener("click", function(ev){ ev.stopPropagation(); openSheet(s.id); });
       markers[s.id] = new maplibregl.Marker({ element: el, anchor:"bottom", subpixelPositioning: true })
         .setLngLat([s.lng, s.lat]).addTo(map);
