@@ -322,6 +322,7 @@
   .badge.on{background:#fdecef;color:var(--red);}
   .badge.off{background:#f1f1f4;color:#8a8a95;}
   .badge.share{background:#eaeef6;color:var(--navy);}
+  .badge.count{background:#f3f0e8;color:#8a7a4a;}
   .memo{white-space:pre-wrap;margin:14px 0 0;font-size:14px;color:#33333a;}
   .meta{margin-top:14px;font-size:12px;color:var(--sub);}
   .sheet-actions{display:flex;flex-wrap:wrap;gap:8px;padding:16px 18px 0;}
@@ -788,7 +789,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.037";
+var APP_VERSION = "1.038";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -809,7 +810,7 @@ var KEY_MYPHOTOS = "conan-seichi-myphotos";
 var KEY_UID = "conan-seichi-uid";
 var KEY_ICON = "conan-seichi-icon";
 var KEY_CMT = "conan-seichi-cmt-tokens";
-var SHARED_COLS = "id,created_at,name,work,works,addr,memo,lat,lng,author,author_id,photos";
+var SHARED_COLS = "id,created_at,name,work,works,addr,memo,lat,lng,author,author_id,photos,add_count";
 var SHARED_PHOTO_MAX = 10;  // 共有モードの写真枚数の上限（SQL側の上限と必ず揃えること）
 var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
 var PHOTO_MAX_PX = 900;     // 保存する画像の長辺
@@ -1234,6 +1235,23 @@ function sbRemovePhoto(id, url, token, cb){
     .then(function(ok){ cb(ok === true); })
     .catch(function(){ cb(false); });
 }
+/* 自分の記録に追加した／取り消したことを記録し、人数を返す */
+function sbSetAdded(id, added, cb){
+  if(!hasServer()){ if(cb) cb(-1); return; }
+  fetch(sbBase() + "/rest/v1/rpc/set_spot_added",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_id:id, p_uid:myUid, p_added:!!added }) })
+    .then(function(r){ return r.ok ? r.json() : -1; })
+    .then(function(n){
+      if(typeof n === "number" && n >= 0){
+        for(var i=0;i<shared.length;i++){
+          if(String(shared[i].id) === String(id)){ shared[i].add_count = n; break; }
+        }
+      }
+      if(cb) cb(n);
+    })
+    .catch(function(){ if(cb) cb(-1); });
+}
 function sbSetPhotos(id, token, urls, cb){
   fetch(sbBase() + "/rest/v1/rpc/set_spot_photos",
         { method:"POST", headers: sbHeaders(),
@@ -1639,6 +1657,9 @@ function openSheet(id){
     h += alreadyCopied(s.id)
       ? '<span class="badge on">✓ 自分の記録に追加済み</span>'
       : '<span class="badge share">みんなの聖地</span>';
+    if(s.add_count > 0){
+      h += ' <span class="badge count">👣 '+s.add_count+'人が記録に追加</span>';
+    }
   }else{
     migrateVisits(s);
     h += s.visits.length
@@ -1819,8 +1840,10 @@ function openSheet(id){
     document.getElementById("sEdit").onclick = function(){ closeSheet(); openForm(id); };
     document.getElementById("sDel").onclick = function(){
       if(!confirm("「"+s.name+"」を自分の記録から削除しますか？")) return;
+      var fromId = s.fromShared;
       personal = personal.filter(function(x){ return x.id!==id; });
       saveLocal(); renderMarkers(); closeSheet(); renderList(); toast("削除しました");
+      if(fromId && !alreadyCopied(fromId)) sbSetAdded(fromId, false, function(){ renderList(); });
     };
     var sh = document.getElementById("sShare");
     if(sh) sh.onclick = function(){ shareExisting(s); };
@@ -2011,6 +2034,7 @@ function copyToPersonal(s){
   };
   personal.push(rec);
   if(!saveLocal()) return;
+  sbSetAdded(s.id, true, function(){ renderList(); });
   renderMarkers(); renderList();
   closeSheet();
   setMode("personal", true);
@@ -2715,6 +2739,7 @@ document.getElementById("fSave").addEventListener("click", function(){
               lat: lat, lng: lng, photos: []
             });
             saveLocal();
+            sbSetAdded(mine.id, true);
           }
         }
         rememberMyPhotos(urls || []);
@@ -2958,6 +2983,9 @@ function renderList(){
         : (s.author
             ? '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author)+'</span>'
             : '');
+      if(s.add_count > 0){
+        badge += '<span class="b" style="background:#f3f0e8;color:#8a7a4a;margin-left:5px;">👣 '+s.add_count+'</span>';
+      }
       subHtml = worksOf(s).length ? workLabelHtml(s) : esc(s.addr || "作品未設定");
     }else{
       migrateVisits(s);
@@ -2990,6 +3018,8 @@ function bulkAddToPersonal(list){
   if(!saveLocal()) return;
   renderMarkers(); renderList();
   toast(added + "件を自分の記録に追加しました");
+  list.forEach(function(s){ sbSetAdded(s.id, true); });
+  setTimeout(renderList, 1200);
 }
 
 cardsEl.addEventListener("click", function(e){
@@ -3662,6 +3692,23 @@ document.getElementById("btnReset").addEventListener("click", function(){
   personal = []; saveLocal(); renderMarkers(); renderList(); toast("削除しました");
 });
 
+/* 以前に追加したぶんを、一度だけサーバーへ知らせる */
+var KEY_ADDSYNC = "conan-seichi-addsync";
+function syncAddedOnce(){
+  if(!hasServer()) return;
+  if(localStorage.getItem(KEY_ADDSYNC) === "1") return;
+  var ids = {};
+  personal.forEach(function(p){ if(p.fromShared) ids[p.fromShared] = 1; });
+  var list = Object.keys(ids);
+  try{ localStorage.setItem(KEY_ADDSYNC, "1"); }catch(e){}
+  if(!list.length) return;
+  var i = 0;
+  (function next(){
+    if(i >= list.length){ renderList(); return; }
+    sbSetAdded(list[i++], true, next);
+  })();
+}
+
 /* ================= 起動 ================= */
 loadLocal();
 if(sortMode === "near") sortMode = "new";   // 起動直後は現在地がないので通常の並びから
@@ -3679,6 +3726,7 @@ if(hasServer()){
   sbLoadCourses(renderCourseList);
   sbLoad(function(){
     renderMarkers(); renderList(); renderCourseList(); updateWorkBtn();
+    syncAddedOnce();
   });
 }
 
