@@ -791,7 +791,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.040";
+var APP_VERSION = "1.041";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1442,14 +1442,15 @@ function numPinEl(n){
   return el;
 }
 /* ---- 写真ピンと名前ラベル ---- */
-var PHOTO_ZOOM = 12;        // これ以上に拡大したら写真を出す
+var PHOTO_ZOOM = 10;        // これ以上に拡大したら写真を出す
 /* 引きぎみのときは枚数を抑えて、通信量が増えすぎないようにする */
 function photoLimit(){
   if(!map) return 0;
   var z = map.getZoom();
   if(z >= 14) return 16;
   if(z >= 13) return 12;
-  if(z >= PHOTO_ZOOM) return 8;
+  if(z >= 12) return 10;
+  if(z >= PHOTO_ZOOM) return 6;
   return 0;
 }
 var markerSpot = {}, markerLook = {};
