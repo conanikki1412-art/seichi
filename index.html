@@ -76,6 +76,21 @@
   }
   .seg button.on{background:var(--navy);color:#fff;}
   #modeBar{position:absolute;top:calc(66px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:5;}
+  #filterBar{
+    position:absolute;top:calc(116px + var(--safe-t));left:50%;transform:translateX(-50%);z-index:5;
+    display:flex;align-items:center;gap:2px;background:var(--navy);color:#fff;border-radius:999px;
+    padding:4px;box-shadow:0 3px 14px rgba(0,0,0,.22);max-width:calc(100% - 24px);
+  }
+  #filterBarOpen{
+    color:#fff;padding:6px 4px 6px 8px;font-size:13px;font-weight:700;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:66vw;
+  }
+  #filterBarClear{
+    width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.2);
+    color:#fff;font-size:14px;flex:none;
+  }
+  .fbcat{background:rgba(255,255,255,.22);border-radius:5px;padding:1px 7px;margin-right:6px;font-size:.9em;}
+  .fbn{font-weight:400;opacity:.75;margin-left:6px;font-size:.9em;}
   #listModeBar{margin-top:12px;box-shadow:none;background:#f1f1f4;}
   #listModeBar button.on{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.12);}
 
@@ -480,6 +495,11 @@
         <button data-m="personal">自分の記録</button>
       </div>
 
+      <div id="filterBar" style="display:none;">
+        <button id="filterBarOpen"><span id="filterBarText"></span></button>
+        <button id="filterBarClear" aria-label="しぼりこみを解除">×</button>
+      </div>
+
       <div id="crosshair">
         <div class="pin"><svg viewBox="0 0 32 42"><path d="M16 1.6c-7.1 0-12.9 5.8-12.9 12.9 0 3.5 1.6 7.4 4 11.2 2.4 3.8 5.4 7.3 7.6 9.6.7.8 1.9.8 2.6 0 2.2-2.3 5.2-5.8 7.6-9.6 2.4-3.8 4-7.7 4-11.2C28.9 7.4 23.1 1.6 16 1.6z" fill="#d7263d" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="14.5" r="5.2" fill="#fff"/></svg></div>
       </div>
@@ -750,7 +770,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.033";
+var APP_VERSION = "1.034";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2041,7 +2061,34 @@ function updateWorkBtn(){
     lbl = (String(workFilter).indexOf("/") >= 0 ? p.title : p.cat).slice(0,4);
   }
   workBtn.innerHTML = "<span>" + esc(lbl) + "</span>";
+  updateFilterBar();
 }
+/* 地図の上に、いましぼりこんでいる作品を出す */
+function updateFilterBar(){
+  var bar = document.getElementById("filterBar");
+  if(!bar) return;
+  if(!workFilter || courseView || pickMode){ bar.style.display = "none"; return; }
+  var isCat = String(workFilter).indexOf("/") < 0;
+  var p = splitWork(workFilter);
+  var n = currentList().length;
+  document.getElementById("filterBarText").innerHTML =
+    '<span class="fbcat">' + esc(isCat ? workFilter : p.cat) + '</span>'
+    + (isCat ? "" : esc(p.title))
+    + '<b class="fbn">' + n + '件</b>';
+  bar.style.display = "flex";
+}
+document.getElementById("filterBarOpen").addEventListener("click", function(){
+  workSheetCat = workFilter && String(workFilter).indexOf("/") >= 0 ? splitWork(workFilter).cat : null;
+  renderWorkSheet();
+  styleSheet.style.display = "none";
+  workSheet.style.display = "block";
+});
+document.getElementById("filterBarClear").addEventListener("click", function(){
+  workFilter = null;
+  updateWorkBtn();
+  renderMarkers(); renderList(); fitAll();
+  toast("すべての作品を表示します");
+});
 function renderWorkSheet(){
   var tree = workTree();
   var total = rawList().length;
@@ -2117,6 +2164,7 @@ function chrome(){
   var busy = pickMode || formPage.style.display === "flex";
   document.getElementById("nav").style.display = busy ? "none" : "flex";
   modeBar.style.display = pickMode ? "none" : "flex";
+  updateFilterBar();
   if(map) setTimeout(function(){ map.resize(); }, 60);
 }
 /* ピンの位置を微調整するモード */
@@ -2775,6 +2823,7 @@ function renderList(){
     }
   }
 
+  updateFilterBar();
   cardsEl.innerHTML = bulkHtml + arr.map(function(s){
     var th, badge, subHtml;
     if(MODE === "shared"){
