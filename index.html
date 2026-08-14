@@ -138,6 +138,27 @@
   .pickrow .sname{flex:1;min-width:0;}
   .pickrow button{flex:none;background:var(--navy);color:#fff;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;}
   .pickrow button.added{background:#eceef3;color:#8a8a95;}
+  /* 作品名の選択 */
+  .worksel{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+  .worksel span{
+    display:inline-flex;align-items:center;gap:6px;background:#eaeef6;color:var(--navy);
+    border-radius:999px;padding:8px 8px 8px 13px;font-size:14px;font-weight:700;
+  }
+  .worksel span button{
+    width:20px;height:20px;border-radius:50%;background:rgba(27,42,73,.15);color:var(--navy);font-size:12px;
+  }
+  .worksel .none{color:var(--sub);font-size:13px;font-weight:400;background:none;padding:0;}
+  .worklist{display:flex;flex-wrap:wrap;gap:7px;max-height:32vh;overflow-y:auto;}
+  .worklist button{
+    padding:8px 13px;border-radius:999px;border:1px solid var(--line);
+    background:#fafafb;font-size:13px;color:#555;
+  }
+  .worklist button.on{border-color:var(--navy);background:#eaeef6;color:var(--navy);font-weight:700;}
+  .photo-by{
+    display:flex;align-items:center;gap:7px;padding:10px 18px 0;font-size:12px;color:var(--sub);
+  }
+  .photo-by .avatar,.photo-by .avatar-ph{width:22px;height:22px;font-size:11px;}
+
   .chiprow{display:flex;flex-wrap:wrap;gap:8px;}
   .chiprow button{
     padding:9px 14px;border-radius:999px;border:1.5px solid var(--line);
@@ -551,6 +572,15 @@
         <div class="set-item" id="btnAdmin" style="display:none;">
           <div><div>管理用の合言葉</div><small id="adminState">なし</small></div><div class="go">入力</div>
         </div>
+        <div class="set-item admin-only" id="btnMergeWork" style="display:none;">
+          <div><div>作品名をまとめる</div><small>表記ゆれを1つに統一します</small></div><div class="go">整理</div>
+        </div>
+        <div class="set-item admin-only" id="btnBackupAll" style="display:none;">
+          <div><div>みんなの聖地を丸ごと保存</div><small>聖地・コメント・コースをファイルに書き出します</small></div><div class="go">保存</div>
+        </div>
+        <div class="set-item admin-only" id="btnRestoreAll" style="display:none;">
+          <div><div>丸ごと保存から復元</div><small>消えたものだけを戻します。今あるものは変わりません</small></div><div class="go">復元</div>
+        </div>
       </div>
       <div class="set-sec">
         <div class="set-item" id="btnExport">
@@ -605,8 +635,13 @@
           <input type="text" id="fName" placeholder="例：米花町交差点">
         </div>
         <div class="field">
-          <label>作品・話数</label>
-          <input type="text" id="fWork" placeholder="例：劇場版『100万ドルの五稜星』">
+          <label>作品（5つまで選べます）</label>
+          <div id="fWorksSel"></div>
+          <div id="fWorksList" class="worklist"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input type="text" id="fWorkNew" placeholder="一覧にない作品を追加" maxlength="60" style="flex:1;">
+            <button id="fWorkAdd" style="flex:none;background:var(--navy);color:#fff;border-radius:12px;padding:0 16px;font-size:14px;font-weight:700;">追加</button>
+          </div>
         </div>
         <div class="field">
           <label>住所</label>
@@ -669,6 +704,7 @@
 <input type="file" id="importInput" accept="application/json,.json" hidden>
 <input type="file" id="sharedPhotoInput" accept="image/*" multiple hidden>
 <input type="file" id="avatarInput" accept="image/*" hidden>
+<input type="file" id="restoreAllInput" accept="application/json,.json" hidden>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
@@ -679,7 +715,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.023";
+var APP_VERSION = "1.025";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -700,7 +736,7 @@ var KEY_MYPHOTOS = "conan-seichi-myphotos";
 var KEY_UID = "conan-seichi-uid";
 var KEY_ICON = "conan-seichi-icon";
 var KEY_CMT = "conan-seichi-cmt-tokens";
-var SHARED_COLS = "id,created_at,name,work,addr,memo,lat,lng,author,author_id,photos";
+var SHARED_COLS = "id,created_at,name,work,works,addr,memo,lat,lng,author,author_id,photos";
 var SHARED_PHOTO_MAX = 10;  // 共有モードの写真枚数の上限（SQL側の上限と必ず揃えること）
 var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
 var PHOTO_MAX_PX = 900;     // 保存する画像の長辺
@@ -750,19 +786,44 @@ var courseTokens = {};     // 自分が作ったコースの鍵
 function hasServer(){ return !!(SUPABASE_URL && SUPABASE_ANON_KEY); }
 function rawList(){ return MODE === "shared" ? shared : personal; }
 
-/* 作品でしぼりこむ */
+/* 作品でしぼりこむ。作品名は複数持てる */
 var workFilter = null;                     // null = すべて
-function workOf(s){ return (s.work || "").trim() || "作品未設定"; }
+var WORKS_MAX = 5;
+function worksOf(s){
+  var a = Array.isArray(s.works) ? s.works : null;
+  if(!a || !a.length) a = (s.work || "").trim() ? [s.work.trim()] : [];
+  return a.map(function(x){ return String(x||"").trim(); }).filter(Boolean);
+}
+function workLabel(s){
+  var a = worksOf(s);
+  return a.length ? a.join("／") : "作品未設定";
+}
+function hasWork(s, w){
+  var a = worksOf(s);
+  return w === "作品未設定" ? a.length === 0 : a.indexOf(w) >= 0;
+}
 function workList(){
   var m = {};
-  rawList().forEach(function(s){ var w = workOf(s); m[w] = (m[w]||0) + 1; });
+  rawList().forEach(function(s){
+    var a = worksOf(s);
+    if(!a.length){ m["作品未設定"] = (m["作品未設定"]||0) + 1; return; }
+    a.forEach(function(w){ m[w] = (m[w]||0) + 1; });
+  });
   return Object.keys(m).sort(function(a,b){ return m[b]-m[a] || a.localeCompare(b,"ja"); })
     .map(function(w){ return { name:w, n:m[w] }; });
+}
+/* みんなの聖地と自分の記録の両方から、作品名の候補を集める */
+function allWorkNames(){
+  var m = {};
+  shared.concat(personal).forEach(function(s){
+    worksOf(s).forEach(function(w){ m[w] = (m[w]||0) + 1; });
+  });
+  return Object.keys(m).sort(function(a,b){ return m[b]-m[a] || a.localeCompare(b,"ja"); });
 }
 function currentList(){
   var l = rawList();
   if(courseView) l = courseSpots();
-  else if(workFilter) l = l.filter(function(s){ return workOf(s) === workFilter; });
+  else if(workFilter) l = l.filter(function(s){ return hasWork(s, workFilter); });
   return l;
 }
 
@@ -932,6 +993,17 @@ function sbUploadAvatar(dataUrl, cb){
     .then(function(r){ cb(r.ok ? sbBase() + "/storage/v1/object/public/avatars/" + path : null); })
     .catch(function(){ cb(null); });
 }
+function sbLoadPhotoOwners(spotId, cb){
+  fetch(sbBase() + "/rest/v1/spot_photo_owners?select=url,user_id&spot_id=eq."
+        + encodeURIComponent(spotId) + "&limit=50", { headers: sbHeaders() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      var m = {};
+      (rows || []).forEach(function(x){ if(x && x.url) m[x.url] = x.user_id || ""; });
+      cb(m);
+    })
+    .catch(function(){ cb({}); });
+}
 function sbLoadComments(spotId, cb){
   fetch(sbBase() + "/rest/v1/comments?select=id,spot_id,user_id,name,body,created_at"
         + "&spot_id=eq." + encodeURIComponent(spotId) + "&order=created_at.asc&limit=200",
@@ -960,7 +1032,7 @@ function sbDeleteComment(id, token, cb){
 function sbAppendPhotos(id, urls, token, cb){
   fetch(sbBase() + "/rest/v1/rpc/append_spot_photos",
         { method:"POST", headers: sbHeaders(),
-          body: JSON.stringify({ p_id:id, p_urls:urls, p_token:token }) })
+          body: JSON.stringify({ p_id:id, p_urls:urls, p_token:token, p_uid:myUid }) })
     .then(function(r){ return r.ok ? r.json() : false; })
     .then(function(ok){ cb(ok === true); })
     .catch(function(){ cb(false); });
@@ -985,7 +1057,7 @@ function sbUpdateInfo(id, token, info, cb){
   fetch(sbBase() + "/rest/v1/rpc/update_spot_info",
         { method:"POST", headers: sbHeaders(),
           body: JSON.stringify({ p_id:id, p_token:token,
-            p_name:info.name, p_work:info.work, p_addr:info.addr, p_memo:info.memo }) })
+            p_name:info.name, p_works:info.works, p_addr:info.addr, p_memo:info.memo }) })
     .then(function(r){ return r.ok ? r.json() : false; })
     .then(function(ok){ cb(ok === true); })
     .catch(function(){ cb(false); });
@@ -1263,10 +1335,11 @@ function openSheet(id){
          + photos.map(function(_,i){ return '<i class="'+(i===0?"on":"")+'"></i>'; }).join("")
          + '</div>';
     }
+    if(isShared) h += '<div class="photo-by" id="photoBy"></div>';
   }
   h += '<div class="sheet-pad">';
   h += '<div class="sheet-title"><h2>'+esc(s.name)+'</h2><button class="closeX" id="sClose">×</button></div>';
-  if(s.work) h += '<p class="work">'+esc(s.work)+'</p>';
+  if(worksOf(s).length) h += '<p class="work">'+esc(workLabel(s))+'</p>';
   if(s.addr) h += '<p class="work" style="font-size:12px;">📍 '+esc(s.addr)+'</p>';
 
   if(isShared){
@@ -1360,6 +1433,17 @@ function openSheet(id){
   document.getElementById("sClose").onclick = closeSheet;
 
   // 写真ギャラリーのページ表示
+  // 写真を入れた人の表示
+  if(isShared && photos.length){
+    photoOwnerMap = {};
+    photoIndex = 0;
+    updatePhotoBy(s, photos);
+    sbLoadPhotoOwners(s.id, function(m){
+      photoOwnerMap = m || {};
+      updatePhotoBy(s, photos);
+    });
+  }
+
   var gal = document.getElementById("gal");
   if(gal && photos.length > 1){
     var dots = document.getElementById("galDots");
@@ -1374,6 +1458,7 @@ function openSheet(id){
         var step = (first ? first.offsetWidth + 10 : gal.clientWidth) || 1;
         var i = Math.min(photos.length - 1, Math.max(0, Math.round(gal.scrollLeft / step)));
         if(cnt) cnt.textContent = (i+1) + " / " + photos.length;
+        photoIndex = i; updatePhotoBy(s, photos);
         if(dots) Array.prototype.forEach.call(dots.children, function(el, j){
           el.classList.toggle("on", j === i);
         });
@@ -1450,6 +1535,19 @@ function openSheet(id){
   if(isShared) setupComments(s);
 
   if(document.getElementById("mapPage").classList.contains("active")) flyTo(s.lat, s.lng, 15);
+}
+
+/* ---------------- 写真を入れた人 ---------------- */
+var photoOwnerMap = {}, photoIndex = 0;
+function updatePhotoBy(s, photos){
+  var el = document.getElementById("photoBy");
+  if(!el) return;
+  var url = photos[photoIndex];
+  var uid = photoOwnerMap[url];
+  if(uid === undefined) uid = s.author_id || "";   // 記録が無い写真は登録者のもの
+  if(!uid && !s.author){ el.innerHTML = ""; return; }
+  var nm = displayName(uid, uid ? "" : (s.author || ""));
+  el.innerHTML = '<span>この写真</span>' + avatarHtml(uid, nm) + '<b style="color:var(--text);font-size:12px;">'+esc(nm)+'</b>';
 }
 
 /* ---------------- コメント ---------------- */
@@ -1613,7 +1711,8 @@ sheetMask.addEventListener("click", closeSheet);
 function copyToPersonal(s){
   var rec = {
     id: uid(), created: Date.now(), fromShared: s.id,
-    name: s.name, work: s.work || "", addr: s.addr || "", memo: s.memo || "",
+    name: s.name, works: worksOf(s).slice(), work: (worksOf(s)[0] || ""),
+    addr: s.addr || "", memo: s.memo || "",
     visited: false, date: "", visits: [], lat: s.lat, lng: s.lng, photos: []
   };
   personal.push(rec);
@@ -1635,7 +1734,8 @@ function shareExisting(s){
     toast(pics.length ? "写真を送信中…" : "登録中…");
     sbUploadAll(pics, function(urls){
     sbInsert({
-      name: s.name.slice(0,80), work: (s.work||"").slice(0,120), addr: (s.addr||"").slice(0,200),
+      name: s.name.slice(0,80), work: (worksOf(s)[0]||"").slice(0,60), works: worksOf(s).slice(0, WORKS_MAX),
+      addr: (s.addr||"").slice(0,200),
       memo: (s.memo||"").slice(0,1000), lat: s.lat, lng: s.lng,
       author: nick.slice(0,40), author_id: myUid, edit_token: token, photos: urls
     }, function(ok){
@@ -1677,13 +1777,13 @@ searchInput.addEventListener("input", function(){
   clearTimeout(geoTimer);
   if(!q){ suggest.style.display="none"; return; }
   var hits = currentList().filter(function(s){
-    return (s.name+" "+(s.work||"")+" "+(s.addr||"")+" "+(s.memo||"")).toLowerCase().indexOf(q.toLowerCase()) >= 0;
+    return (s.name+" "+worksOf(s).join(" ")+" "+(s.addr||"")+" "+(s.memo||"")).toLowerCase().indexOf(q.toLowerCase()) >= 0;
   }).slice(0, 8);
   var h = "";
   if(hits.length){
     h += '<div class="s-head">'+(MODE==="shared"?"みんなの聖地":"自分の記録")+'</div>';
     h += hits.map(function(s){
-      return '<div class="s-item" data-id="'+esc(s.id)+'><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")+'</span></div>';
+      return '<div class="s-item" data-id="'+esc(s.id)+'><b>'+esc(s.name)+'</b><span>'+esc(workLabel(s))+'</span></div>';
     }).join("");
   }
   h += '<div class="s-head" id="geoHead">地名で探す…</div>';
@@ -1942,7 +2042,6 @@ document.getElementById("addNext").addEventListener("click", function(){
 
 /* ================= フォーム ================= */
 var fName = document.getElementById("fName"),
-    fWork = document.getElementById("fWork"),
     fAddr = document.getElementById("fAddr"),
     fMemo = document.getElementById("fMemo"),
     fAuthor = document.getElementById("fAuthor"),
@@ -1972,14 +2071,66 @@ Array.prototype.forEach.call(document.querySelectorAll(".destseg button"), funct
   });
 });
 
+/* ---- 作品名の選択UI ---- */
+function renderWorksPicker(){
+  if(!draft) return;
+  if(!Array.isArray(draft.works)) draft.works = [];
+  var sel = document.getElementById("fWorksSel");
+  sel.className = "worksel";
+  sel.innerHTML = draft.works.length
+    ? draft.works.map(function(w,i){
+        return '<span>'+esc(w)+'<button data-wdel="'+i+'">×</button></span>';
+      }).join("")
+    : '<span class="none">未選択（下から選ぶか、新しく追加できます）</span>';
+  Array.prototype.forEach.call(sel.querySelectorAll("button[data-wdel]"), function(b){
+    b.onclick = function(){ draft.works.splice(+b.dataset.wdel, 1); renderWorksPicker(); };
+  });
+
+  var box = document.getElementById("fWorksList");
+  var names = allWorkNames();
+  draft.works.forEach(function(w){ if(names.indexOf(w) < 0) names.unshift(w); });
+  box.innerHTML = names.length
+    ? names.map(function(w){
+        return '<button data-w="'+esc(w)+'" class="'+(draft.works.indexOf(w)>=0?"on":"")+'">'+esc(w)+'</button>';
+      }).join("")
+    : '<p class="hint" style="margin:0;">まだ作品名がありません。下の欄から追加してください</p>';
+  Array.prototype.forEach.call(box.querySelectorAll("button[data-w]"), function(b){
+    b.onclick = function(){ toggleWork(b.dataset.w); };
+  });
+}
+function toggleWork(w){
+  w = String(w || "").trim();
+  if(!w || !draft) return;
+  var i = draft.works.indexOf(w);
+  if(i >= 0){ draft.works.splice(i, 1); }
+  else{
+    if(draft.works.length >= WORKS_MAX){ toast("作品は"+WORKS_MAX+"つまでです"); return; }
+    draft.works.push(w);
+  }
+  renderWorksPicker();
+}
+document.getElementById("fWorkAdd").addEventListener("click", function(){
+  var inp = document.getElementById("fWorkNew");
+  var w = (inp.value || "").trim();
+  if(!w){ toast("作品名を入力してください"); return; }
+  if(draft && draft.works.indexOf(w) >= 0){ toast("すでに選ばれています"); inp.value = ""; return; }
+  toggleWork(w);
+  inp.value = "";
+});
+document.getElementById("fWorkNew").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); document.getElementById("fWorkAdd").click(); }
+});
+
 /* みんなの聖地の内容を編集（登録者・管理者のみ） */
 var editingShared = null;
 function openSharedEdit(s){
   editingShared = s;
   editingId = null;
   draft = { lat:s.lat, lng:s.lng, photos:[], visits:[], addrAuto:false, visited:false };
-  fName.value = s.name || ""; fWork.value = s.work || "";
+  draft.works = worksOf(s).slice();
+  fName.value = s.name || "";
   fAddr.value = s.addr || ""; fMemo.value = s.memo || "";
+  renderWorksPicker();
   document.getElementById("fDestField").style.display = "none";
   setDest("shared");
   document.getElementById("fAuthorField").style.display = "none";
@@ -2002,17 +2153,19 @@ function openForm(id, lat, lng){
     if(!s) return;
     migrateVisits(s);
     draft = { lat:s.lat, lng:s.lng, photos:(s.photos||[]).slice(),
-              visits:s.visits.slice(), addrAuto:!s.addr };
-    fName.value = s.name || ""; fWork.value = s.work || ""; fAddr.value = s.addr || "";
+              visits:s.visits.slice(), works:worksOf(s).slice(), addrAuto:!s.addr };
+    fName.value = s.name || ""; fAddr.value = s.addr || "";
     fMemo.value = s.memo || "";
+    renderWorksPicker();
     setVisited(s.visits.length > 0);
     document.getElementById("fDestField").style.display = "none";
     setDest("personal");
     document.getElementById("fTitle").textContent = "記録を編集";
     if(!s.addr) fillAddress();
   }else{
-    draft = { lat:lat, lng:lng, photos:[], visits:[], addrAuto:true };
-    fName.value = ""; fWork.value = ""; fMemo.value = ""; fAddr.value = "";
+    draft = { lat:lat, lng:lng, photos:[], visits:[], works:[], addrAuto:true };
+    fName.value = ""; fMemo.value = ""; fAddr.value = "";
+    renderWorksPicker();
     fAuthor.value = nickname;
     setVisited(true);
     document.getElementById("fDestField").style.display = hasServer() ? "block" : "none";
@@ -2094,7 +2247,7 @@ document.getElementById("fSave").addEventListener("click", function(){
     btn.textContent = "保存中…";
     sbUpdateInfo(target.id, sharedToken(target.id), {
       name: name.slice(0,80),
-      work: fWork.value.trim().slice(0,120),
+      works: (draft.works || []).slice(0, WORKS_MAX),
       addr: fAddr.value.trim().slice(0,200),
       memo: fMemo.value.trim().slice(0,1000)
     }, function(ok){
@@ -2131,8 +2284,9 @@ document.getElementById("fSave").addEventListener("click", function(){
       return;
     }
     saveBtn.textContent = "保存中…";
+    var wks = (draft.works || []).slice(0, WORKS_MAX);
     sbInsert({
-      name: name.slice(0,80), work: fWork.value.trim().slice(0,120),
+      name: name.slice(0,80), work: (wks[0] || ""), works: wks,
       addr: fAddr.value.trim().slice(0,200), memo: fMemo.value.trim().slice(0,1000),
       lat: lat, lng: lng, author: nickname, author_id: myUid, edit_token: token, photos: urls
     }, function(ok){
@@ -2141,7 +2295,7 @@ document.getElementById("fSave").addEventListener("click", function(){
       formPage.style.display = "none";
       draft = null; editingId = null;
       chrome();
-      var w0 = fWork.value.trim(), a0 = fAddr.value.trim(), m0 = fMemo.value.trim();
+      var w0 = wks.slice(), a0 = fAddr.value.trim(), m0 = fMemo.value.trim();
       toast("みんなの聖地に登録しました");
       setMode("shared", true);
       sbLoad(function(){
@@ -2154,7 +2308,7 @@ document.getElementById("fSave").addEventListener("click", function(){
           if(!alreadyCopied(mine.id)){
             personal.push({
               id: uid(), created: Date.now(), fromShared: mine.id,
-              name: name, work: w0, addr: a0, memo: m0,
+              name: name, works: w0, work: (w0[0]||""), addr: a0, memo: m0,
               visits: [today()], visited: true, date: today(),
               lat: lat, lng: lng, photos: []
             });
@@ -2173,7 +2327,8 @@ document.getElementById("fSave").addEventListener("click", function(){
 
   var visits = uniqSorted(draft.visits);
   var data = {
-    name:name, work:fWork.value.trim(), addr:fAddr.value.trim(), memo:fMemo.value.trim(),
+    name:name, works:(draft.works||[]).slice(0, WORKS_MAX), work:((draft.works||[])[0]||""),
+    addr:fAddr.value.trim(), memo:fMemo.value.trim(),
     visits: visits, visited: visits.length > 0, date: visits[0] || "",
     lat: draft.lat, lng: draft.lng, photos: draft.photos.slice()
   };
@@ -2308,14 +2463,14 @@ function renderList(){
         : (s.author
             ? '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author)+'</span>'
             : '');
-      sub = s.work || s.addr || "作品未設定";
+      sub = worksOf(s).length ? workLabel(s) : (s.addr || "作品未設定");
     }else{
       migrateVisits(s);
       th = safePhotoUrl((s.photos||[])[0]) ? '<img class="thumb" loading="lazy" src="'+esc(safePhotoUrl(s.photos[0]))+'">' : '<div class="thumb ph">📍</div>';
       badge = s.visited
         ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ '+s.visits.length+'回訪問'+(s.date? ' ・初回 '+esc(fmtDate(s.date)) : '')+'</span>'
         : '<span class="b" style="background:#f1f1f4;color:#8a8a95;">未訪問</span>';
-      sub = s.work || s.addr || "作品未設定";
+      sub = worksOf(s).length ? workLabel(s) : (s.addr || "作品未設定");
     }
     return '<div class="card" data-id="'+esc(s.id)+'">'+th
       + '<div class="info"><h4>'+esc(s.name)+'</h4><p>'+esc(sub)+'</p>'+badge+'</div></div>';
@@ -2430,7 +2585,7 @@ function showCourseSheet(){
     + list.map(function(s,i){
         var st = (c.stay_time || [])[i] || "";
         var row = '<div class="step" data-sid="'+esc(s.id)+'"><div class="no">'+(i+1)+'</div>'
-                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(s.work||"作品未設定")
+                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(workLabel(s))
                 + (st ? ' ・ 滞在 '+esc(st) : '') + '</span></div></div>';
         if(i < list.length - 1){
           var lt = legText(c, i);
@@ -2559,7 +2714,7 @@ function renderSteps(){
   draftSteps.forEach(function(id,i){
     var s = spotById(id);
     h += '<div class="step"><div class="no">'+(i+1)+'</div>'
-      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? (s.work||"作品未設定") : "")+'</span>'
+      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? workLabel(s) : "")+'</span>'
       + '<input class="stayin" type="text" data-stay="'+i+'" placeholder="滞在時間（例：60分）" maxlength="20" value="'+esc(draftStay[i]||"")+'">'
       + '</div>'
       + '<div class="ops">'
@@ -2623,13 +2778,13 @@ function renderPicker(){
   var q = (document.getElementById("cSearch").value || "").trim().toLowerCase();
   var el = document.getElementById("cPicker");
   var list = shared.filter(function(s){
-    return !q || (s.name+" "+(s.work||"")+" "+(s.addr||"")).toLowerCase().indexOf(q) >= 0;
+    return !q || (s.name+" "+worksOf(s).join(" ")+" "+(s.addr||"")).toLowerCase().indexOf(q) >= 0;
   }).slice(0, 120);
   if(!list.length){ el.innerHTML = '<p class="hint" style="margin:8px 0 0;">該当する聖地がありません</p>'; return; }
   el.innerHTML = list.map(function(s){
     var n = draftSteps.filter(function(x){ return x === s.id; }).length;
     return '<div class="pickrow"><div class="sname"><b style="font-size:14px;">'+esc(s.name)+'</b>'
-      + '<span style="font-size:11px;color:var(--sub);display:block;">'+esc(s.work||"作品未設定")+'</span></div>'
+      + '<span style="font-size:11px;color:var(--sub);display:block;">'+esc(workLabel(s))+'</span></div>'
       + '<button data-add="'+esc(s.id)+'">' + (n ? "追加（"+n+"回）" : "追加") + '</button></div>';
   }).join("");
   Array.prototype.forEach.call(el.querySelectorAll("button[data-add]"), function(b){
@@ -2768,7 +2923,14 @@ function updateAdminState(){
     ? "入力済み。すべての聖地とコメントを消せます"
     : "なし。自分が登録したものだけ直せます";
   // 管理キーが入っている端末では最初から表示する
-  if(adminKey) document.getElementById("btnAdmin").style.display = "flex";
+  if(adminKey) showAdminRows();
+}
+
+function showAdminRows(){
+  document.getElementById("btnAdmin").style.display = "flex";
+  Array.prototype.forEach.call(document.querySelectorAll(".admin-only"), function(el){
+    el.style.display = adminKey ? "flex" : "none";
+  });
 }
 
 /* 管理メニューは普段は隠しておき、設定画面のバージョン表示を5回タップで出す */
@@ -2784,7 +2946,7 @@ function updateAdminState(){
     taps = 0;
     var row = document.getElementById("btnAdmin");
     if(row.style.display === "flex"){ toast("すでに表示されています"); return; }
-    row.style.display = "flex";
+    showAdminRows();
     toast("管理用の項目を表示しました");
   });
 })();
@@ -2794,9 +2956,142 @@ document.getElementById("btnAdmin").addEventListener("click", function(){
   adminKey = (k || "").trim();
   localStorage.setItem(KEY_ADMIN, adminKey);
   updateAdminState();
+  showAdminRows();
   closeSheet(); renderMarkers();
   toast(adminKey ? "管理モードになりました" : "管理モードを解除しました");
 });
+/* ---------------- 管理者用：作品名をまとめる ---------------- */
+function sbMergeWork(from, to, cb){
+  fetch(sbBase() + "/rest/v1/rpc/merge_work",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({ p_token:adminKey, p_from:from, p_to:to }) })
+    .then(function(r){ return r.ok ? r.json() : -1; })
+    .then(function(n){ cb(typeof n === "number" ? n : -1); })
+    .catch(function(){ cb(-1); });
+}
+document.getElementById("btnMergeWork").addEventListener("click", function(){
+  if(!adminKey){ toast("管理用の合言葉が必要です"); return; }
+  var names = {};
+  shared.forEach(function(s){ worksOf(s).forEach(function(w){ names[w] = (names[w]||0)+1; }); });
+  var list = Object.keys(names).sort(function(a,b){ return names[b]-names[a] || a.localeCompare(b,"ja"); });
+  if(!list.length){ toast("作品名がまだありません"); return; }
+
+  var msg = "まとめたい作品名の番号を入力してください\n\n"
+          + list.map(function(w,i){ return (i+1)+". "+w+"（"+names[w]+"件）"; }).join("\n");
+  var pick = prompt(msg, "");
+  if(pick === null) return;
+  var idx = parseInt(pick, 10) - 1;
+  if(isNaN(idx) || idx < 0 || idx >= list.length){ toast("番号が正しくありません"); return; }
+  var from = list[idx];
+
+  var to = prompt("「"+from+"」を、どの作品名にまとめますか？\n（空にすると、この作品名を取り除きます）", from);
+  if(to === null) return;
+  to = (to || "").trim();
+  if(to === from){ toast("同じ名前です"); return; }
+  if(!confirm("「"+from+"」を"+(to ? "「"+to+"」にまとめます" : "取り除きます")+"。よろしいですか？")) return;
+
+  toast("整理しています…");
+  sbMergeWork(from, to, function(n){
+    if(n < 0){ toast("できませんでした（合言葉をご確認ください）"); return; }
+    sbLoad(function(){
+      workFilter = null; updateWorkBtn();
+      renderMarkers(); renderList(); renderCourseList();
+      toast(n + "件を書き換えました");
+    });
+  });
+});
+
+/* ---------------- 管理者用：みんなの聖地の丸ごと保存と復元 ---------------- */
+function sbAll(table, cols, cb){
+  fetch(sbBase() + "/rest/v1/" + table + "?select=" + cols + "&limit=5000", { headers: sbHeaders() })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(cb)
+    .catch(function(){ cb(null); });
+}
+function sbBulkInsert(table, rows, cb){
+  if(!rows.length){ cb(true, 0); return; }
+  var done = 0, okAll = true, i = 0;
+  (function next(){
+    if(i >= rows.length){ cb(okAll, done); return; }
+    var chunk = rows.slice(i, i + 100); i += 100;
+    fetch(sbBase() + "/rest/v1/" + table + "?on_conflict=id",
+          { method:"POST",
+            headers: sbHeaders({ "Prefer":"resolution=ignore-duplicates,return=minimal" }),
+            body: JSON.stringify(chunk) })
+      .then(function(r){ if(r.ok) done += chunk.length; else okAll = false; next(); })
+      .catch(function(){ okAll = false; next(); });
+  })();
+}
+document.getElementById("btnBackupAll").addEventListener("click", function(){
+  if(!adminKey){ toast("管理用の合言葉が必要です"); return; }
+  toast("読み込み中…");
+  var out = { savedAt: new Date().toISOString(), spots:[], comments:[], courses:[], profiles:[] };
+  sbAll("spots", "id,created_at,name,work,addr,memo,lat,lng,author,author_id,photos", function(a){
+    out.spots = a || [];
+    sbAll("comments", "id,spot_id,user_id,name,body,created_at", function(b){
+      out.comments = b || [];
+      sbAll("courses", "id,created_at,title,memo,spot_ids,author,author_id,leg_transport,leg_time,stay_time", function(c){
+        out.courses = c || [];
+        sbAll("profiles", "user_id,name,icon", function(d){
+          out.profiles = d || [];
+          var blob = new Blob([JSON.stringify(out, null, 2)], { type:"application/json" });
+          var a2 = document.createElement("a");
+          a2.href = URL.createObjectURL(blob);
+          a2.download = "seichi-all-" + new Date().toISOString().slice(0,10) + ".json";
+          document.body.appendChild(a2); a2.click(); a2.remove();
+          toast("聖地"+out.spots.length+"件・コメント"+out.comments.length+"件・コース"+out.courses.length+"件を保存しました");
+        });
+      });
+    });
+  });
+});
+document.getElementById("btnRestoreAll").addEventListener("click", function(){
+  if(!adminKey){ toast("管理用の合言葉が必要です"); return; }
+  document.getElementById("restoreAllInput").click();
+});
+document.getElementById("restoreAllInput").addEventListener("change", function(e){
+  var f = e.target.files[0]; e.target.value = "";
+  if(!f) return;
+  var r = new FileReader();
+  r.onload = function(){
+    var data;
+    try{ data = JSON.parse(r.result); }catch(err){ toast("そのファイルは読み込めませんでした"); return; }
+    if(!data || !Array.isArray(data.spots)){ toast("中身が違うようです"); return; }
+    if(!confirm("消えているものだけを戻します。今あるデータは書き換えません。よろしいですか？")) return;
+
+    toast("復元しています…");
+    var spotRows = data.spots.map(function(s){
+      return { id:s.id, created_at:s.created_at, name:s.name, work:s.work, addr:s.addr, memo:s.memo,
+               lat:s.lat, lng:s.lng, author:s.author, author_id:s.author_id,
+               photos: Array.isArray(s.photos) ? s.photos : [], edit_token: randToken() };
+    });
+    sbBulkInsert("spots", spotRows, function(ok1, n1){
+      var cmtRows = (data.comments || []).map(function(c){
+        return { id:c.id, spot_id:c.spot_id, user_id:c.user_id, name:c.name || "名無し",
+                 body:c.body, created_at:c.created_at, edit_token: randToken() };
+      });
+      sbBulkInsert("comments", cmtRows, function(ok2, n2){
+        var crsRows = (data.courses || []).map(function(c){
+          return { id:c.id, created_at:c.created_at, title:c.title, memo:c.memo, spot_ids:c.spot_ids,
+                   author:c.author, author_id:c.author_id, leg_transport:c.leg_transport,
+                   leg_time:c.leg_time, stay_time:c.stay_time, edit_token: randToken() };
+        });
+        sbBulkInsert("courses", crsRows, function(ok3, n3){
+          sbLoadProfiles(function(){
+            sbLoad(function(){
+              sbLoadCourses(function(){
+                renderMarkers(); renderList(); renderCourseList();
+                toast((ok1&&ok2&&ok3) ? "復元しました" : "一部を復元できませんでした");
+              });
+            });
+          });
+        });
+      });
+    });
+  };
+  r.readAsText(f);
+});
+
 document.getElementById("btnReload").addEventListener("click", function(){
   if(!hasServer()){ toast("オンラインにつながっていません"); return; }
   toast("読み込み中…");
