@@ -637,11 +637,13 @@
         <div class="field">
           <label>作品（5つまで選べます）</label>
           <div id="fWorksSel"></div>
+          <div id="fCatRow" class="chiprow" style="margin-bottom:10px;"></div>
           <div id="fWorksList" class="worklist"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
-            <input type="text" id="fWorkNew" placeholder="一覧にない作品を追加" maxlength="60" style="flex:1;">
+            <input type="text" id="fWorkNew" placeholder="一覧にないタイトルを追加" maxlength="60" style="flex:1;">
             <button id="fWorkAdd" style="flex:none;background:var(--navy);color:#fff;border-radius:12px;padding:0 16px;font-size:14px;font-weight:700;">追加</button>
           </div>
+          <p class="hint" id="fWorkHint" style="margin:8px 0 0;"></p>
         </div>
         <div class="field">
           <label>住所</label>
@@ -715,7 +717,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.025";
+var APP_VERSION = "1.026";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -789,6 +791,27 @@ function rawList(){ return MODE === "shared" ? shared : personal; }
 /* 作品でしぼりこむ。作品名は複数持てる */
 var workFilter = null;                     // null = すべて
 var WORKS_MAX = 5;
+var CATEGORIES = ["劇場版","単行本","TVアニメ","作者ゆかりの地","OP＆ED","その他"];
+/* 作品名は「カテゴリ/タイトル」。タイトルなしのカテゴリだけも可 */
+function splitWork(w){
+  w = String(w || "").trim();
+  var i = w.indexOf("/");
+  if(i > 0) return { cat: w.slice(0,i).trim(), title: w.slice(i+1).trim() };
+  if(CATEGORIES.indexOf(w) >= 0) return { cat: w, title: "" };
+  return { cat: "その他", title: w };
+}
+function joinWork(cat, title){
+  cat = String(cat||"").trim(); title = String(title||"").trim();
+  return title ? cat + "/" + title : cat;
+}
+function workText(w){
+  var p = splitWork(w);
+  return p.title ? p.cat + " " + p.title : p.cat;
+}
+function catOrder(c){
+  var i = CATEGORIES.indexOf(c);
+  return i < 0 ? 99 : i;
+}
 function worksOf(s){
   var a = Array.isArray(s.works) ? s.works : null;
   if(!a || !a.length) a = (s.work || "").trim() ? [s.work.trim()] : [];
@@ -796,11 +819,36 @@ function worksOf(s){
 }
 function workLabel(s){
   var a = worksOf(s);
-  return a.length ? a.join("／") : "作品未設定";
+  return a.length ? a.map(workText).join("／") : "作品未設定";
 }
-function hasWork(s, w){
+/* しぼりこみ。f が「カテゴリ」だけならそのカテゴリ全部が対象 */
+function hasWork(s, f){
   var a = worksOf(s);
-  return w === "作品未設定" ? a.length === 0 : a.indexOf(w) >= 0;
+  if(f === "作品未設定") return a.length === 0;
+  if(String(f).indexOf("/") >= 0) return a.indexOf(f) >= 0;
+  // カテゴリ名としても、昔の形式の作品名としても拾えるようにする
+  return a.some(function(w){ return w === f || splitWork(w).cat === f; });
+}
+/* カテゴリごとにまとめた一覧 */
+function workTree(){
+  var m = {};
+  rawList().forEach(function(s){
+    var a = worksOf(s);
+    if(!a.length){ m["作品未設定"] = m["作品未設定"] || { n:0, items:{} }; m["作品未設定"].n++; return; }
+    a.forEach(function(w){
+      var p = splitWork(w);
+      if(!m[p.cat]) m[p.cat] = { n:0, items:{} };
+      m[p.cat].n++;
+      if(p.title) m[p.cat].items[w] = (m[p.cat].items[w] || 0) + 1;
+    });
+  });
+  return Object.keys(m).sort(function(a,b){ return catOrder(a)-catOrder(b) || a.localeCompare(b,"ja"); })
+    .map(function(c){
+      var items = Object.keys(m[c].items).sort(function(a,b){
+        return a.localeCompare(b, "ja", { numeric:true });
+      }).map(function(w){ return { name:w, title:splitWork(w).title, n:m[c].items[w] }; });
+      return { cat:c, n:m[c].n, items:items };
+    });
 }
 function workList(){
   var m = {};
@@ -1878,34 +1926,57 @@ document.getElementById("locBtn").addEventListener("click", function(){
 /* ---------------- 作品でしぼりこむ ---------------- */
 var workSheet = document.getElementById("workSheet");
 var workBtn = document.getElementById("workBtn");
+var workSheetCat = null;   // 開いているフォルダ
 function updateWorkBtn(){
   workBtn.classList.toggle("on", !!workFilter);
-  workBtn.innerHTML = "<span>" + esc(workFilter ? workFilter.slice(0,3) : "作品") + "</span>";
+  var lbl = "作品";
+  if(workFilter){
+    var p = splitWork(workFilter);
+    lbl = (String(workFilter).indexOf("/") >= 0 ? p.title : p.cat).slice(0,4);
+  }
+  workBtn.innerHTML = "<span>" + esc(lbl) + "</span>";
 }
 function renderWorkSheet(){
-  var ws = workList();
+  var tree = workTree();
   var total = rawList().length;
-  workSheet.innerHTML =
-    '<button data-w="" class="'+(workFilter?"":"on")+'">すべての作品<i>'+total+'</i></button>'
-    + ws.map(function(w){
-        return '<button data-w="'+esc(w.name)+'" class="'+(workFilter===w.name?"on":"")+'">'
-             + esc(w.name)+'<i>'+w.n+'</i></button>';
-      }).join("");
+  var h = "";
+  if(workSheetCat === null){
+    h += '<button data-w="" class="'+(workFilter?"":"on")+'">すべて<i>'+total+'</i></button>';
+    h += tree.map(function(c){
+      var on = workFilter === c.cat;
+      return '<button data-cat="'+esc(c.cat)+'" class="'+(on?"on":"")+'">📁 '+esc(c.cat)+'<i>'+c.n+'</i></button>';
+    }).join("");
+  }else{
+    var cur = tree.filter(function(c){ return c.cat === workSheetCat; })[0];
+    h += '<button data-back="1">← フォルダ一覧にもどる</button>';
+    h += '<button data-w="'+esc(workSheetCat)+'" class="'+(workFilter===workSheetCat?"on":"")+'">'
+       + esc(workSheetCat)+'すべて<i>'+(cur?cur.n:0)+'</i></button>';
+    h += (cur ? cur.items : []).map(function(it){
+      return '<button data-w="'+esc(it.name)+'" class="'+(workFilter===it.name?"on":"")+'">'
+           + esc(it.title)+'<i>'+it.n+'</i></button>';
+    }).join("");
+  }
+  workSheet.innerHTML = h;
 }
 workBtn.addEventListener("click", function(){
   if(courseView){ toast("コースの表示中はしぼりこめません"); return; }
+  workSheetCat = null;
   renderWorkSheet();
   styleSheet.style.display = "none";
   workSheet.style.display = workSheet.style.display === "block" ? "none" : "block";
 });
 workSheet.addEventListener("click", function(e){
+  var back = e.target.closest("button[data-back]");
+  if(back){ workSheetCat = null; renderWorkSheet(); return; }
+  var cb = e.target.closest("button[data-cat]");
+  if(cb){ workSheetCat = cb.dataset.cat; renderWorkSheet(); return; }
   var b = e.target.closest("button[data-w]");
   if(!b) return;
   workFilter = b.dataset.w || null;
   workSheet.style.display = "none";
   updateWorkBtn();
   renderMarkers(); renderList(); fitAll();
-  toast(workFilter ? "「"+workFilter+"」でしぼりこみました" : "すべての作品を表示します");
+  toast(workFilter ? "「"+workText(workFilter)+"」でしぼりこみました" : "すべての作品を表示します");
 });
 
 var styleSheet = document.getElementById("styleSheet");
@@ -2072,31 +2143,59 @@ Array.prototype.forEach.call(document.querySelectorAll(".destseg button"), funct
 });
 
 /* ---- 作品名の選択UI ---- */
+var formCat = "劇場版";
 function renderWorksPicker(){
   if(!draft) return;
   if(!Array.isArray(draft.works)) draft.works = [];
+
   var sel = document.getElementById("fWorksSel");
   sel.className = "worksel";
   sel.innerHTML = draft.works.length
     ? draft.works.map(function(w,i){
-        return '<span>'+esc(w)+'<button data-wdel="'+i+'">×</button></span>';
+        return '<span>'+esc(workText(w))+'<button data-wdel="'+i+'">×</button></span>';
       }).join("")
-    : '<span class="none">未選択（下から選ぶか、新しく追加できます）</span>';
+    : '<span class="none">未選択。下からカテゴリを選んでください</span>';
   Array.prototype.forEach.call(sel.querySelectorAll("button[data-wdel]"), function(b){
     b.onclick = function(){ draft.works.splice(+b.dataset.wdel, 1); renderWorksPicker(); };
   });
 
+  var cats = CATEGORIES.slice();
+  allWorkNames().forEach(function(w){
+    var c = splitWork(w).cat;
+    if(cats.indexOf(c) < 0) cats.push(c);
+  });
+  document.getElementById("fCatRow").innerHTML = cats.map(function(c){
+    return '<button data-cat="'+esc(c)+'" class="'+(formCat===c?"on":"")+'">'+esc(c)+'</button>';
+  }).join("");
+  Array.prototype.forEach.call(document.getElementById("fCatRow").querySelectorAll("button[data-cat]"), function(b){
+    b.onclick = function(){ formCat = b.dataset.cat; renderWorksPicker(); };
+  });
+
+  var names = allWorkNames().filter(function(w){ return splitWork(w).cat === formCat && splitWork(w).title; });
+  draft.works.forEach(function(w){
+    if(splitWork(w).cat === formCat && splitWork(w).title && names.indexOf(w) < 0) names.unshift(w);
+  });
+  names.sort(function(a,b){ return a.localeCompare(b, "ja", { numeric:true }); });
+
   var box = document.getElementById("fWorksList");
-  var names = allWorkNames();
-  draft.works.forEach(function(w){ if(names.indexOf(w) < 0) names.unshift(w); });
-  box.innerHTML = names.length
-    ? names.map(function(w){
-        return '<button data-w="'+esc(w)+'" class="'+(draft.works.indexOf(w)>=0?"on":"")+'">'+esc(w)+'</button>';
-      }).join("")
-    : '<p class="hint" style="margin:0;">まだ作品名がありません。下の欄から追加してください</p>';
+  var h = '<button data-w="'+esc(formCat)+'" class="'+(draft.works.indexOf(formCat)>=0?"on":"")+'">'
+        + esc(formCat)+'（タイトルなし）</button>';
+  h += names.map(function(w){
+    return '<button data-w="'+esc(w)+'" class="'+(draft.works.indexOf(w)>=0?"on":"")+'">'
+         + esc(splitWork(w).title)+'</button>';
+  }).join("");
+  box.innerHTML = h;
   Array.prototype.forEach.call(box.querySelectorAll("button[data-w]"), function(b){
     b.onclick = function(){ toggleWork(b.dataset.w); };
   });
+
+  document.getElementById("fWorkNew").placeholder =
+    formCat === "単行本" ? "例：86巻 県警の黒い闇" :
+    formCat === "劇場版" ? "例：緋色の弾丸" :
+    formCat === "TVアニメ" ? "例：第1話 ジェットコースター殺人事件" :
+    formCat === "OP＆ED" ? "例：夢で逢いましょう" : "タイトル";
+  document.getElementById("fWorkHint").textContent =
+    "「" + formCat + "」に追加されます（" + formCat + "/入力したタイトル）";
 }
 function toggleWork(w){
   w = String(w || "").trim();
@@ -2111,8 +2210,9 @@ function toggleWork(w){
 }
 document.getElementById("fWorkAdd").addEventListener("click", function(){
   var inp = document.getElementById("fWorkNew");
-  var w = (inp.value || "").trim();
-  if(!w){ toast("作品名を入力してください"); return; }
+  var t = (inp.value || "").trim().replace(/\//g, "／");   // 区切り文字とぶつからないように
+  if(!t){ toast("タイトルを入力してください"); return; }
+  var w = joinWork(formCat, t);
   if(draft && draft.works.indexOf(w) >= 0){ toast("すでに選ばれています"); inp.value = ""; return; }
   toggleWork(w);
   inp.value = "";
