@@ -724,7 +724,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.028";
+var APP_VERSION = "1.029";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -828,6 +828,30 @@ function workLabel(s){
   var a = worksOf(s);
   return a.length ? a.map(workText).join("／") : "作品未設定";
 }
+/* 同じ話が複数巻にまたがる場合、表示のときだけ巻数をまとめる
+   （データは「71巻 ホームズの黙示録」「72巻 ホームズの黙示録」と別々に持つ） */
+function mergedWorks(list){
+  var groups = [], index = {};
+  list.forEach(function(w){
+    var p = splitWork(w);
+    var vol = "", rest = p.title;
+    if(p.cat === "単行本"){
+      var m = p.title.match(/^\s*(\d+)\s*巻\s*(.*)$/);
+      if(m){ vol = parseInt(m[1], 10); rest = (m[2] || "").trim(); }
+    }
+    var key = p.cat + "\u0000" + rest;
+    if(!index[key]){ index[key] = { cat:p.cat, rest:rest, vols:[] }; groups.push(index[key]); }
+    if(vol !== "") index[key].vols.push(vol);
+  });
+  groups.forEach(function(g){
+    g.vols.sort(function(a,b){ return a-b; });
+    g.text = g.vols.length
+      ? g.vols.map(function(v){ return v + "巻"; }).join(" ") + (g.rest ? " " + g.rest : "")
+      : g.rest;
+  });
+  return groups;
+}
+
 /* カテゴリだけ色を変えて表示する */
 function workChipHtml(w){
   var p = splitWork(w);
@@ -836,7 +860,9 @@ function workChipHtml(w){
 function workLabelHtml(s){
   var a = worksOf(s);
   if(!a.length) return '<span class="wnone">作品未設定</span>';
-  return a.map(workChipHtml).join('<span class="wsep">／</span>');
+  return mergedWorks(a).map(function(g){
+    return '<span class="wcat">'+esc(g.cat)+'</span>' + esc(g.text);
+  }).join('<span class="wsep">／</span>');
 }
 /* しぼりこみ。f が「カテゴリ」だけならそのカテゴリ全部が対象 */
 function hasWork(s, f){
@@ -2213,7 +2239,7 @@ function renderWorksPicker(){
     formCat === "OP＆ED" ? "例：夢で逢いましょう" : "タイトル";
   document.getElementById("fWorkHint").textContent =
     formCat === "単行本"
-      ? "「単行本」に追加されます。複数巻にまたがる話は「105-106巻 タイトル」と書くと「105巻 106巻 タイトル」になります"
+      ? "「単行本」に追加されます。「105-106巻 タイトル」と書くと、巻ごとに登録され、表示は「105巻 106巻 タイトル」にまとまります"
       : "「" + formCat + "」に追加されます";
 }
 function toggleWork(w){
@@ -2227,28 +2253,35 @@ function toggleWork(w){
   }
   renderWorksPicker();
 }
-/* 「105-106巻 タイトル」は「105巻 106巻 タイトル」に直す。
-   ひとつの作品が複数巻にまたがっていることを、巻ごとに並べて示す */
-function normalizeVolumes(cat, title){
-  if(cat !== "単行本") return title;
+/* 「105-106巻 タイトル」は、巻ごとに分けて登録する。
+   表示するときだけ「105巻 106巻 タイトル」とまとめる */
+function expandVolumes(cat, title){
+  if(cat !== "単行本") return [joinWork(cat, title)];
   var m = title.match(/^\s*(\d+)\s*[-–—ー〜~－]\s*(\d+)\s*巻\s*(.*)$/);
-  if(!m) return title;
+  if(!m) return [joinWork(cat, title)];
   var a = parseInt(m[1],10), b = parseInt(m[2],10), rest = (m[3]||"").trim();
-  if(isNaN(a) || isNaN(b) || b < a || b - a > 20) return title;
-  var vols = [];
-  for(var v = a; v <= b; v++) vols.push(v + "巻");
-  return vols.join(" ") + (rest ? " " + rest : "");
+  if(isNaN(a) || isNaN(b) || b < a || b - a > 9) return [joinWork(cat, title)];
+  var out = [];
+  for(var v = a; v <= b; v++) out.push(joinWork(cat, v + "巻" + (rest ? " " + rest : "")));
+  return out;
 }
 document.getElementById("fWorkAdd").addEventListener("click", function(){
   var inp = document.getElementById("fWorkNew");
   var t = (inp.value || "").trim().replace(/\//g, "／");   // 区切り文字とぶつからないように
   if(!t){ toast("タイトルを入力してください"); return; }
-  var t2 = normalizeVolumes(formCat, t);
-  var w = joinWork(formCat, t2);
-  if(draft && draft.works.indexOf(w) >= 0){ toast("すでに選ばれています"); inp.value = ""; return; }
-  toggleWork(w);
+  var list = expandVolumes(formCat, t);
+  var added = 0, dup = 0, full = false;
+  list.forEach(function(w){
+    if(!draft) return;
+    if(draft.works.indexOf(w) >= 0){ dup++; return; }
+    if(draft.works.length >= WORKS_MAX){ full = true; return; }
+    draft.works.push(w); added++;
+  });
+  renderWorksPicker();
   inp.value = "";
-  if(t2 !== t) toast("「"+t2+"」として登録しました");
+  if(full) toast("作品は" + WORKS_MAX + "つまでです");
+  else if(!added && dup) toast("すでに選ばれています");
+  else if(list.length > 1) toast(added + "巻ぶんを登録しました");
 });
 document.getElementById("fWorkNew").addEventListener("keydown", function(e){
   if(e.key === "Enter"){ e.preventDefault(); document.getElementById("fWorkAdd").click(); }
