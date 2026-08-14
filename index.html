@@ -740,7 +740,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.031";
+var APP_VERSION = "1.032";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -2669,7 +2669,15 @@ function renderList(){
     return;
   }
 
-  cardsEl.innerHTML = arr.map(function(s){
+  var bulkHtml = "";
+  if(MODE === "shared"){
+    var todo = arr.filter(function(s){ return !alreadyCopied(s.id); });
+    if(todo.length > 1){
+      bulkHtml = '<button class="newbtn" id="bulkAdd">＋ 表示中の'+todo.length+'件を自分の記録に追加</button>';
+    }
+  }
+
+  cardsEl.innerHTML = bulkHtml + arr.map(function(s){
     var th, badge, subHtml;
     if(MODE === "shared"){
       th = safePhotoUrl((s.photos||[])[0])
@@ -2693,7 +2701,35 @@ function renderList(){
       + '<div class="info"><h4>'+esc(s.name)+'</h4><p>'+subHtml+'</p>'+badge+'</div></div>';
   }).join("");
 }
+/* みんなの聖地を、表示中のぶんだけまとめて自分の記録へ */
+function bulkAddToPersonal(list){
+  var added = 0;
+  list.forEach(function(s){
+    if(alreadyCopied(s.id)) return;
+    personal.push({
+      id: uid(), created: Date.now() + added, fromShared: s.id,
+      name: s.name, works: worksOf(s).slice(), work: (worksOf(s)[0] || ""),
+      addr: s.addr || "", memo: s.memo || "",
+      visited: false, date: "", visits: [],
+      lat: s.lat, lng: s.lng, photos: []
+    });
+    added++;
+  });
+  if(!added){ toast("追加できるものがありませんでした"); return; }
+  if(!saveLocal()) return;
+  renderMarkers(); renderList();
+  toast(added + "件を自分の記録に追加しました");
+}
+
 cardsEl.addEventListener("click", function(e){
+  var bulk = e.target.closest("#bulkAdd");
+  if(bulk){
+    var list = currentList().filter(function(s){ return !alreadyCopied(s.id); });
+    if(!list.length){ toast("すべて追加済みです"); return; }
+    if(!confirm("表示中の" + list.length + "件を、自分の記録に追加します。\n未訪問として入るので、行った場所は個別に訪問済みにしてください。")) return;
+    bulkAddToPersonal(list);
+    return;
+  }
   var c = e.target.closest(".card");
   if(!c) return;
   showPage("mapPage");
