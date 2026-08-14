@@ -593,7 +593,7 @@
     <div id="coursePage2" style="position:absolute;inset:0;z-index:900;background:#fff;display:none;flex-direction:column;">
       <div class="topbar">
         <button class="cancel" id="cCancel">キャンセル</button>
-        <h3>コースを作る</h3>
+        <h3 id="cPageTitle">コースを作る</h3>
         <button id="cSave">投稿</button>
       </div>
       <div class="form-body">
@@ -643,6 +643,9 @@
         </div>
         <div class="set-item" id="btnAdmin" style="display:none;">
           <div><div>管理用の合言葉</div><small id="adminState">なし</small></div><div class="go">入力</div>
+        </div>
+        <div class="set-item admin-only" id="btnStats" style="display:none;">
+          <div><div>利用状況</div><small id="statsState">使っている人の数などを見る</small></div><div class="go">見る</div>
         </div>
         <div class="set-item admin-only" id="btnMergeWork" style="display:none;">
           <div><div>作品名をまとめる</div><small>表記ゆれを1つに統一します</small></div><div class="go">整理</div>
@@ -791,7 +794,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.041";
+var APP_VERSION = "1.044";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -3074,6 +3077,17 @@ function sbAddCourse(row, cb){
     .then(function(r){ cb(r.ok); })
     .catch(function(){ cb(false); });
 }
+function sbUpdateCourse(id, token, row, cb){
+  fetch(sbBase() + "/rest/v1/rpc/update_course",
+        { method:"POST", headers: sbHeaders(),
+          body: JSON.stringify({
+            p_id:id, p_token:token, p_title:row.title, p_memo:row.memo,
+            p_spot_ids:row.spot_ids, p_leg_transport:row.leg_transport,
+            p_leg_time:row.leg_time, p_stay_time:row.stay_time }) })
+    .then(function(r){ return r.ok ? r.json() : false; })
+    .then(function(ok){ cb(ok === true); })
+    .catch(function(){ cb(false); });
+}
 function sbDeleteCourse(id, token, cb){
   fetch(sbBase() + "/rest/v1/rpc/delete_course",
         { method:"POST", headers: sbHeaders(), body: JSON.stringify({ p_id:id, p_token:token }) })
@@ -3166,7 +3180,8 @@ function showCourseSheet(){
       }).join("")
     + '</div>'
     + '<div class="sheet-actions">'
-    + '<button class="act-edit" id="cvClose">コース表示を終了</button>'
+    + '<button class="act-edit" id="cvClose">表示を終了</button>'
+    + (canDel ? '<button class="act-edit" id="cvEdit">内容を編集</button>' : '')
     + (canDel ? '<button class="act-del" id="cvDel">🗑</button>' : '')
     + '</div>';
   sheetBody.innerHTML = h;
@@ -3177,6 +3192,8 @@ function showCourseSheet(){
   sheetMask.style.opacity = "";
   document.getElementById("sClose").onclick = closeSheet;
   document.getElementById("cvClose").onclick = closeCourse;
+  var ce = document.getElementById("cvEdit");
+  if(ce) ce.onclick = function(){ closeSheet(); openCourseEdit(c); };
   var dl = document.getElementById("cvDel");
   if(dl) dl.onclick = function(){
     if(!confirm("コース「"+c.title+"」を削除しますか？")) return;
@@ -3195,6 +3212,7 @@ function showCourseSheet(){
 
 /* ---- コース作成 ---- */
 var coursePage2 = document.getElementById("coursePage2");
+var editingCourse = null;
 var draftSteps = [];
 var TRANSPORTS = ["徒歩", "自転車", "車", "電車", "バス", "タクシー", "その他"];
 var draftLegT = [], draftLegM = [], draftStay = [];   // 区間ごとの移動手段・所要時間／地点ごとの滞在時間
@@ -3260,20 +3278,39 @@ function legText(c, i){
   if(!t && !m) return "";
   return [t, m].filter(Boolean).join(" ");
 }
+function openCourseForm(){
+  coursePage2.style.display = "flex";
+  document.getElementById("nav").style.display = "none";
+  document.getElementById("cPageTitle").textContent = editingCourse ? "コースを編集" : "コースを作る";
+  document.getElementById("cSave").textContent = editingCourse ? "保存" : "投稿";
+}
 document.getElementById("btnNewCourse").addEventListener("click", function(){
   if(!hasServer()){ toast("オンラインにつながっていません"); return; }
   if(shared.length < 2){ toast("みんなの聖地が2か所以上必要です"); return; }
+  editingCourse = null;
   draftSteps = []; draftLegT = []; draftLegM = []; draftStay = [];
   document.getElementById("cTitle").value = "";
   document.getElementById("cMemo").value = "";
   document.getElementById("cSearch").value = "";
   renderSteps(); renderPicker();
-  coursePage2.style.display = "flex";
-  document.getElementById("nav").style.display = "none";
+  openCourseForm();
 });
+function openCourseEdit(c){
+  editingCourse = c;
+  draftSteps = (c.spot_ids || []).slice();
+  draftLegT  = (c.leg_transport || []).slice();
+  draftLegM  = (c.leg_time || []).slice();
+  draftStay  = (c.stay_time || []).slice();
+  document.getElementById("cTitle").value = c.title || "";
+  document.getElementById("cMemo").value = c.memo || "";
+  document.getElementById("cSearch").value = "";
+  renderSteps(); renderPicker();
+  openCourseForm();
+}
 document.getElementById("cCancel").addEventListener("click", function(){
   coursePage2.style.display = "none";
   document.getElementById("nav").style.display = "flex";
+  editingCourse = null;
 });
 function renderSteps(){
   var el = document.getElementById("cSteps");
@@ -3335,6 +3372,12 @@ function renderSteps(){
   });
   updateDraftTotal();
 }
+/* 区間の配列は、必ず「地点数 － 1」の長さにそろえる（足りないぶんは空欄） */
+function legArray(src, n){
+  var out = [];
+  for(var i = 0; i < n; i++) out.push(String((src && src[i]) || "").slice(0, 20));
+  return out;
+}
 function updateDraftTotal(){
   var el = document.getElementById("cTotal");
   if(!el) return;
@@ -3372,6 +3415,34 @@ document.getElementById("cSave").addEventListener("click", function(){
   var title = (document.getElementById("cTitle").value || "").trim();
   if(!title){ toast("コース名を入れてください"); return; }
   if(draftSteps.length < 2){ toast("2か所以上えらんでください"); return; }
+
+  // 編集の保存
+  if(editingCourse){
+    var target = editingCourse;
+    var eb = document.getElementById("cSave");
+    eb.textContent = "保存中…";
+    sbUpdateCourse(target.id, courseTokens[target.id] || adminKey, {
+      title: title.slice(0,60),
+      memo: (document.getElementById("cMemo").value || "").trim().slice(0,1000),
+      spot_ids: draftSteps.slice(),
+      leg_transport: legArray(draftLegT, draftSteps.length - 1),
+      leg_time:      legArray(draftLegM, draftSteps.length - 1),
+      stay_time:     legArray(draftStay, draftSteps.length)
+    }, function(ok){
+      eb.textContent = "保存";
+      if(!ok){ toast("保存できませんでした（権限がない可能性があります）"); return; }
+      coursePage2.style.display = "none";
+      document.getElementById("nav").style.display = "flex";
+      editingCourse = null;
+      sbLoadCourses(function(){
+        renderCourseList();
+        toast("コースを更新しました");
+        var c2 = courses.filter(function(x){ return String(x.id) === String(target.id); })[0];
+        if(c2 && courseView) openCourse(c2);
+      });
+    });
+    return;
+  }
   if(!nickname){
     var n = prompt("表示される名前を入力してください", "");
     if(n === null) return;
@@ -3387,9 +3458,9 @@ document.getElementById("cSave").addEventListener("click", function(){
     title: title.slice(0,60),
     memo: (document.getElementById("cMemo").value || "").trim().slice(0,1000),
     spot_ids: draftSteps.slice(),
-    leg_transport: draftLegT.slice(0, Math.max(0, draftSteps.length - 1)).map(function(x){ return (x||"").slice(0,20); }),
-    leg_time:      draftLegM.slice(0, Math.max(0, draftSteps.length - 1)).map(function(x){ return (x||"").slice(0,20); }),
-    stay_time:     draftSteps.map(function(_, i){ return (draftStay[i]||"").slice(0,20); }),
+    leg_transport: legArray(draftLegT, draftSteps.length - 1),
+    leg_time:      legArray(draftLegM, draftSteps.length - 1),
+    stay_time:     legArray(draftStay, draftSteps.length),
     author: nickname, author_id: myUid, edit_token: token
   }, function(ok){
     btn.textContent = "投稿";
@@ -3531,6 +3602,32 @@ document.getElementById("btnAdmin").addEventListener("click", function(){
   closeSheet(); renderMarkers();
   toast(adminKey ? "管理モードになりました" : "管理モードを解除しました");
 });
+/* ---------------- 利用状況 ---------------- */
+function sbTouchVisitor(){
+  if(!hasServer()) return;
+  try{ if(sessionStorage.getItem("seichi-touched") === "1") return;
+       sessionStorage.setItem("seichi-touched", "1"); }catch(e){}
+  fetch(sbBase() + "/rest/v1/rpc/touch_visitor",
+        { method:"POST", headers: sbHeaders(), body: JSON.stringify({ p_uid: myUid }) })
+    .catch(function(){});
+}
+document.getElementById("btnStats").addEventListener("click", function(){
+  if(!adminKey){ toast("管理用の合言葉が必要です"); return; }
+  var el = document.getElementById("statsState");
+  el.textContent = "読み込み中…";
+  fetch(sbBase() + "/rest/v1/rpc/get_app_stats",
+        { method:"POST", headers: sbHeaders(), body: JSON.stringify({ p_token: adminKey }) })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(x){
+      if(!x){ el.textContent = "取得できませんでした（合言葉をご確認ください）"; return; }
+      el.innerHTML =
+        '使った人 <b>' + x.users + '人</b>（7日間 ' + x.active7 + '人／30日間 ' + x.active30 + '人・新規 ' + x.new7 + '人）<br>'
+      + '聖地 ' + x.spots + '件 ・ 写真 ' + x.photos + '枚 ・ コメント ' + x.comments + '件<br>'
+      + 'コース ' + x.courses + '件 ・ 記録への追加 ' + x.adds + '回 ・ 名前を決めた人 ' + x.profiles + '人';
+    })
+    .catch(function(){ el.textContent = "取得できませんでした"; });
+});
+
 /* ---------------- 管理者用：作品名をまとめる ---------------- */
 function sbMergeWork(from, to, cb){
   fetch(sbBase() + "/rest/v1/rpc/merge_work",
@@ -3739,6 +3836,7 @@ if(!hasServer() && MODE === "shared") MODE = "personal";
 setMode(MODE, true);
 updateServerState();
 if(hasServer()){
+  sbTouchVisitor();
   sbLoadProfiles(function(){ closeSheet(); renderList(); renderCourseList(); });
   sbLoadCourses(renderCourseList);
   sbLoad(function(){
