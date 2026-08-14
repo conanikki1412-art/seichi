@@ -236,7 +236,9 @@
 
   .pin{width:32px;height:42px;cursor:pointer;line-height:0;}
   .pin svg{width:32px;height:42px;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
-  .maplibregl-marker{position:absolute!important;top:0!important;left:0!important;will-change:transform;}
+  .maplibregl-marker,.spot-marker{
+    position:absolute!important;top:0!important;left:0!important;will-change:transform;
+  }
 
   /* 登録バナー */
   #addBanner{
@@ -789,7 +791,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.039";
+var APP_VERSION = "1.040";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1464,12 +1466,18 @@ function pinKindOf(s){
 /* マーカーの要素は作り直さず、中身だけ差し替える
    （作り直すと MapLibre が付けた位置の指定が外れてピンがずれる） */
 function applyMarkerLook(el, s, look){
+  // className を丸ごと入れ替えると MapLibre が付けたクラスが消えて位置がずれるので、
+  // 自分たちのクラスだけを付け外しする
+  el.classList.add("spot-marker");
+  el.classList.remove("pin", "photo-pin", "ring-red", "ring-navy");
   if(look === "photo"){
     var url = safePhotoUrl((s.photos || [])[0]);
-    el.className = "photo-pin " + ringClass(s);
+    el.classList.add("photo-pin");
+    var ring = ringClass(s);
+    if(ring) el.classList.add(ring);
     el.innerHTML = '<div class="pp-img"><img src="'+esc(url)+'" alt=""></div>';
   }else{
-    el.className = "pin";
+    el.classList.add("pin");
     el.innerHTML = pinSvg(pinKindOf(s));
   }
 }
