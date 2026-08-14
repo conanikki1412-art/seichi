@@ -789,7 +789,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.038";
+var APP_VERSION = "1.039";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1440,8 +1440,16 @@ function numPinEl(n){
   return el;
 }
 /* ---- 写真ピンと名前ラベル ---- */
-var PHOTO_ZOOM = 14;        // これ以上に拡大したら写真を出す
-var PHOTO_MAX_ON_SCREEN = 14;
+var PHOTO_ZOOM = 12;        // これ以上に拡大したら写真を出す
+/* 引きぎみのときは枚数を抑えて、通信量が増えすぎないようにする */
+function photoLimit(){
+  if(!map) return 0;
+  var z = map.getZoom();
+  if(z >= 14) return 16;
+  if(z >= 13) return 12;
+  if(z >= PHOTO_ZOOM) return 8;
+  return 0;
+}
 var markerSpot = {}, markerLook = {};
 
 function ringClass(s){
@@ -1478,7 +1486,7 @@ function updatePinLooks(){
   Object.keys(markers).forEach(function(id){
     var s = markerSpot[id];
     if(!s) return;
-    var want = wantPhoto(s) && shown < PHOTO_MAX_ON_SCREEN ? "photo" : "pin";
+    var want = wantPhoto(s) && shown < photoLimit() ? "photo" : "pin";
     if(want === "photo") shown++;
     if(markerLook[id] === want) return;
     applyMarkerLook(markers[id].getElement(), s, want);
@@ -1544,7 +1552,7 @@ function renderMarkers(){
     var photoShown = 0;
     list.forEach(function(s){
       var look = "pin";
-      if(wantPhoto(s) && photoShown < PHOTO_MAX_ON_SCREEN){ look = "photo"; photoShown++; }
+      if(wantPhoto(s) && photoShown < photoLimit()){ look = "photo"; photoShown++; }
       var el = document.createElement("div");
       applyMarkerLook(el, s, look);
       el.addEventListener("click", function(ev){ ev.stopPropagation(); openSheet(s.id); });
