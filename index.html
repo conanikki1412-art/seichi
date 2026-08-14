@@ -770,7 +770,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.034";
+var APP_VERSION = "1.035";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1261,9 +1261,9 @@ function initMap(){
   if(typeof maplibregl === "undefined"){ toast("地図ライブラリを読み込めませんでした"); return; }
   map = new maplibregl.Map({
     container: "map", style: styleById(styleKey).style,
-    center: [139.7671, 35.6812], zoom: 10, attributionControl: { compact:true }
+    center: [137.5, 37.8], zoom: 4, attributionControl: { compact:true }
   });
-  map.on("load", function(){ applyJapanese(); renderMarkers(); fitAll(); });
+  map.on("load", function(){ applyJapanese(); renderMarkers(); fitJapan(); });
   map.on("click", function(){ suggest.style.display = "none"; styleSheet.style.display = "none"; });
 }
 var applying = false;
@@ -1280,9 +1280,26 @@ function applyJapanese(){
   }catch(e){}
   applying = false;
 }
+/* 最初に開いたときは日本全体を映す */
+var JAPAN_BOUNDS = [[127.5, 29.5], [147.0, 46.0]];
+function fitJapan(){
+  if(!map) return;
+  try{ map.fitBounds(JAPAN_BOUNDS, { padding: 24, duration: 0 }); }catch(e){}
+}
 function fitAll(){
   var list = currentList();
   if(!map || !list.length) return;
+
+  // 海外の聖地まで含めると地図が引きすぎるので、その場合は日本全体にとどめる
+  var lats = list.map(function(s){ return s.lat; });
+  var lngs = list.map(function(s){ return s.lng; });
+  var spanLat = Math.max.apply(null, lats) - Math.min.apply(null, lats);
+  var spanLng = Math.max.apply(null, lngs) - Math.min.apply(null, lngs);
+  var inJapan = list.filter(function(s){
+    return s.lat >= 29.5 && s.lat <= 46 && s.lng >= 127.5 && s.lng <= 147;
+  });
+  if((spanLat > 30 || spanLng > 40) && inJapan.length){ fitJapan(); return; }
+
   var b = new maplibregl.LngLatBounds();
   list.forEach(function(s){ b.extend([s.lng, s.lat]); });
   map.fitBounds(b, { padding:80, maxZoom:14, duration:0 });
@@ -1453,7 +1470,7 @@ function setMode(m, quiet){
   renderMarkers();
   renderList();
   if(!quiet) fitAll();
-  if(m === "shared" && hasServer() && !sharedReady) sbLoad(function(){ renderMarkers(); renderList(); fitAll(); });
+  if(m === "shared" && hasServer() && !sharedReady) sbLoad(function(){ renderMarkers(); renderList(); });
 }
 Array.prototype.forEach.call(document.querySelectorAll(".seg button[data-m]"), function(b){
   b.addEventListener("click", function(){ setMode(b.dataset.m); });
@@ -3556,7 +3573,6 @@ if(hasServer()){
   sbLoadCourses(renderCourseList);
   sbLoad(function(){
     renderMarkers(); renderList(); renderCourseList(); updateWorkBtn();
-    if(MODE === "shared") fitAll();
   });
 }
 
