@@ -264,6 +264,13 @@
   .sheet-title h2{margin:0;font-size:22px;font-weight:800;flex:1;line-height:1.3;}
   .closeX{flex:none;width:32px;height:32px;border-radius:50%;background:#f1f1f4;font-size:18px;color:#555;}
   .work{color:var(--sub);font-size:14px;margin:4px 0 0;}
+  .wcat{
+    display:inline-block;background:#eaeef6;color:var(--navy);border-radius:5px;
+    padding:1px 7px;margin-right:5px;font-size:.86em;font-weight:700;letter-spacing:.02em;
+  }
+  .wsep{color:#c9c9d1;margin:0 5px;}
+  .wnone{color:var(--sub);}
+  .worksel span .wcat{background:rgba(27,42,73,.14);}
   .badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;margin-top:10px;}
   .badge.on{background:#fdecef;color:var(--red);}
   .badge.off{background:#f1f1f4;color:#8a8a95;}
@@ -717,7 +724,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.026";
+var APP_VERSION = "1.028";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -820,6 +827,16 @@ function worksOf(s){
 function workLabel(s){
   var a = worksOf(s);
   return a.length ? a.map(workText).join("／") : "作品未設定";
+}
+/* カテゴリだけ色を変えて表示する */
+function workChipHtml(w){
+  var p = splitWork(w);
+  return '<span class="wcat">'+esc(p.cat)+'</span>' + (p.title ? esc(p.title) : "");
+}
+function workLabelHtml(s){
+  var a = worksOf(s);
+  if(!a.length) return '<span class="wnone">作品未設定</span>';
+  return a.map(workChipHtml).join('<span class="wsep">／</span>');
 }
 /* しぼりこみ。f が「カテゴリ」だけならそのカテゴリ全部が対象 */
 function hasWork(s, f){
@@ -1387,7 +1404,7 @@ function openSheet(id){
   }
   h += '<div class="sheet-pad">';
   h += '<div class="sheet-title"><h2>'+esc(s.name)+'</h2><button class="closeX" id="sClose">×</button></div>';
-  if(worksOf(s).length) h += '<p class="work">'+esc(workLabel(s))+'</p>';
+  if(worksOf(s).length) h += '<p class="work">'+workLabelHtml(s)+'</p>';
   if(s.addr) h += '<p class="work" style="font-size:12px;">📍 '+esc(s.addr)+'</p>';
 
   if(isShared){
@@ -1831,7 +1848,7 @@ searchInput.addEventListener("input", function(){
   if(hits.length){
     h += '<div class="s-head">'+(MODE==="shared"?"みんなの聖地":"自分の記録")+'</div>';
     h += hits.map(function(s){
-      return '<div class="s-item" data-id="'+esc(s.id)+'><b>'+esc(s.name)+'</b><span>'+esc(workLabel(s))+'</span></div>';
+      return '<div class="s-item" data-id="'+esc(s.id)+'><b>'+esc(s.name)+'</b><span>'+workLabelHtml(s)+'</span></div>';
     }).join("");
   }
   h += '<div class="s-head" id="geoHead">地名で探す…</div>';
@@ -2152,7 +2169,7 @@ function renderWorksPicker(){
   sel.className = "worksel";
   sel.innerHTML = draft.works.length
     ? draft.works.map(function(w,i){
-        return '<span>'+esc(workText(w))+'<button data-wdel="'+i+'">×</button></span>';
+        return '<span>'+workChipHtml(w)+'<button data-wdel="'+i+'">×</button></span>';
       }).join("")
     : '<span class="none">未選択。下からカテゴリを選んでください</span>';
   Array.prototype.forEach.call(sel.querySelectorAll("button[data-wdel]"), function(b){
@@ -2190,12 +2207,14 @@ function renderWorksPicker(){
   });
 
   document.getElementById("fWorkNew").placeholder =
-    formCat === "単行本" ? "例：86巻 県警の黒い闇" :
+    formCat === "単行本" ? "例：86巻 県警の黒い闇／105-106巻 …" :
     formCat === "劇場版" ? "例：緋色の弾丸" :
     formCat === "TVアニメ" ? "例：第1話 ジェットコースター殺人事件" :
     formCat === "OP＆ED" ? "例：夢で逢いましょう" : "タイトル";
   document.getElementById("fWorkHint").textContent =
-    "「" + formCat + "」に追加されます（" + formCat + "/入力したタイトル）";
+    formCat === "単行本"
+      ? "「単行本」に追加されます。複数巻にまたがる話は「105-106巻 タイトル」と書くと「105巻 106巻 タイトル」になります"
+      : "「" + formCat + "」に追加されます";
 }
 function toggleWork(w){
   w = String(w || "").trim();
@@ -2208,14 +2227,28 @@ function toggleWork(w){
   }
   renderWorksPicker();
 }
+/* 「105-106巻 タイトル」は「105巻 106巻 タイトル」に直す。
+   ひとつの作品が複数巻にまたがっていることを、巻ごとに並べて示す */
+function normalizeVolumes(cat, title){
+  if(cat !== "単行本") return title;
+  var m = title.match(/^\s*(\d+)\s*[-–—ー〜~－]\s*(\d+)\s*巻\s*(.*)$/);
+  if(!m) return title;
+  var a = parseInt(m[1],10), b = parseInt(m[2],10), rest = (m[3]||"").trim();
+  if(isNaN(a) || isNaN(b) || b < a || b - a > 20) return title;
+  var vols = [];
+  for(var v = a; v <= b; v++) vols.push(v + "巻");
+  return vols.join(" ") + (rest ? " " + rest : "");
+}
 document.getElementById("fWorkAdd").addEventListener("click", function(){
   var inp = document.getElementById("fWorkNew");
   var t = (inp.value || "").trim().replace(/\//g, "／");   // 区切り文字とぶつからないように
   if(!t){ toast("タイトルを入力してください"); return; }
-  var w = joinWork(formCat, t);
+  var t2 = normalizeVolumes(formCat, t);
+  var w = joinWork(formCat, t2);
   if(draft && draft.works.indexOf(w) >= 0){ toast("すでに選ばれています"); inp.value = ""; return; }
   toggleWork(w);
   inp.value = "";
+  if(t2 !== t) toast("「"+t2+"」として登録しました");
 });
 document.getElementById("fWorkNew").addEventListener("keydown", function(e){
   if(e.key === "Enter"){ e.preventDefault(); document.getElementById("fWorkAdd").click(); }
@@ -2553,7 +2586,7 @@ function renderList(){
   }
 
   cardsEl.innerHTML = arr.map(function(s){
-    var th, badge, sub;
+    var th, badge, subHtml;
     if(MODE === "shared"){
       th = safePhotoUrl((s.photos||[])[0])
         ? '<img class="thumb" loading="lazy" src="'+esc(safePhotoUrl(s.photos[0]))+'">'
@@ -2563,17 +2596,17 @@ function renderList(){
         : (s.author
             ? '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author)+'</span>'
             : '');
-      sub = worksOf(s).length ? workLabel(s) : (s.addr || "作品未設定");
+      subHtml = worksOf(s).length ? workLabelHtml(s) : esc(s.addr || "作品未設定");
     }else{
       migrateVisits(s);
       th = safePhotoUrl((s.photos||[])[0]) ? '<img class="thumb" loading="lazy" src="'+esc(safePhotoUrl(s.photos[0]))+'">' : '<div class="thumb ph">📍</div>';
       badge = s.visited
         ? '<span class="b" style="background:#fdecef;color:#d7263d;">✓ '+s.visits.length+'回訪問'+(s.date? ' ・初回 '+esc(fmtDate(s.date)) : '')+'</span>'
         : '<span class="b" style="background:#f1f1f4;color:#8a8a95;">未訪問</span>';
-      sub = worksOf(s).length ? workLabel(s) : (s.addr || "作品未設定");
+      subHtml = worksOf(s).length ? workLabelHtml(s) : esc(s.addr || "作品未設定");
     }
     return '<div class="card" data-id="'+esc(s.id)+'">'+th
-      + '<div class="info"><h4>'+esc(s.name)+'</h4><p>'+esc(sub)+'</p>'+badge+'</div></div>';
+      + '<div class="info"><h4>'+esc(s.name)+'</h4><p>'+subHtml+'</p>'+badge+'</div></div>';
   }).join("");
 }
 cardsEl.addEventListener("click", function(e){
@@ -2685,7 +2718,7 @@ function showCourseSheet(){
     + list.map(function(s,i){
         var st = (c.stay_time || [])[i] || "";
         var row = '<div class="step" data-sid="'+esc(s.id)+'"><div class="no">'+(i+1)+'</div>'
-                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+esc(workLabel(s))
+                + '<div class="sname"><b>'+esc(s.name)+'</b><span>'+workLabelHtml(s)
                 + (st ? ' ・ 滞在 '+esc(st) : '') + '</span></div></div>';
         if(i < list.length - 1){
           var lt = legText(c, i);
@@ -2814,7 +2847,7 @@ function renderSteps(){
   draftSteps.forEach(function(id,i){
     var s = spotById(id);
     h += '<div class="step"><div class="no">'+(i+1)+'</div>'
-      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+esc(s ? workLabel(s) : "")+'</span>'
+      + '<div class="sname"><b>'+esc(s ? s.name : "(不明)")+'</b><span>'+(s ? workLabelHtml(s) : "")+'</span>'
       + '<input class="stayin" type="text" data-stay="'+i+'" placeholder="滞在時間（例：60分）" maxlength="20" value="'+esc(draftStay[i]||"")+'">'
       + '</div>'
       + '<div class="ops">'
@@ -2884,7 +2917,7 @@ function renderPicker(){
   el.innerHTML = list.map(function(s){
     var n = draftSteps.filter(function(x){ return x === s.id; }).length;
     return '<div class="pickrow"><div class="sname"><b style="font-size:14px;">'+esc(s.name)+'</b>'
-      + '<span style="font-size:11px;color:var(--sub);display:block;">'+esc(workLabel(s))+'</span></div>'
+      + '<span style="font-size:11px;color:var(--sub);display:block;">'+workLabelHtml(s)+'</span></div>'
       + '<button data-add="'+esc(s.id)+'">' + (n ? "追加（"+n+"回）" : "追加") + '</button></div>';
   }).join("");
   Array.prototype.forEach.call(el.querySelectorAll("button[data-add]"), function(b){
