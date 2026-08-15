@@ -794,7 +794,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.046";
+var APP_VERSION = "1.047";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -817,7 +817,7 @@ var KEY_ICON = "conan-seichi-icon";
 var KEY_CMT = "conan-seichi-cmt-tokens";
 var SHARED_COLS = "id,created_at,name,work,works,addr,memo,lat,lng,author,author_id,photos,add_count";
 var SHARED_PHOTO_MAX = 10;  // 共有モードの写真枚数の上限（SQL側の上限と必ず揃えること）
-var PERSONAL_PHOTO_MAX = 6; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
+var PERSONAL_PHOTO_MAX = 10; // 自分の記録の写真枚数の上限（端末の保存容量の都合）
 var PHOTO_MAX_PX = 900;     // 保存する画像の長辺
 var PHOTO_QUALITY = 0.6;    // JPEG品質
 
@@ -1032,7 +1032,7 @@ function loadLocal(){
 }
 function saveLocal(){
   try{ localStorage.setItem(KEY_SPOTS, JSON.stringify(personal)); return true; }
-  catch(e){ toast("保存できませんでした。写真の枚数を減らしてみてください"); return false; }
+  catch(e){ toast("この端末の保存容量がいっぱいです。写真を減らすか、古い記録を整理してください"); return false; }
 }
 function saveTokens(){ try{ localStorage.setItem(KEY_TOKEN, JSON.stringify(myTokens)); }catch(e){} }
 /* 訪問履歴：visits は ["2026-08-13", "2026-09-01", ...]（昇順）。
