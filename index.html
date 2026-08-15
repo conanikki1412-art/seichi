@@ -794,7 +794,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.045";
+var APP_VERSION = "1.046";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1682,7 +1682,7 @@ function openSheet(id){
       ? '<span class="badge on">✓ 自分の記録に追加済み</span>'
       : '<span class="badge share">みんなの聖地</span>';
     if(s.add_count > 0){
-      h += ' <span class="badge count">👣 '+s.add_count+'人が記録に追加</span>';
+      h += ' <span class="badge count">'+s.add_count+'人が追加済み</span>';
     }
   }else{
     migrateVisits(s);
@@ -1821,6 +1821,7 @@ function openSheet(id){
       sbRemovePhoto(s.id, url, photoToken(s.id), function(ok){
         if(!ok){ toast("削除できませんでした（権限がない可能性があります）"); return; }
         forgetMyPhoto(url);
+        syncPhotosToPersonal(s.id, [url], false);
         sbLoad(function(){
           renderMarkers(); renderList();
           toast("写真を削除しました");
@@ -1956,11 +1957,34 @@ function setupComments(s){
 var photoTarget = null;
 var sharedPhotoInput = document.getElementById("sharedPhotoInput");
 
+/* 共有に入れた自分の写真を、自分の記録にも入れる（取り消したら外す） */
+function syncPhotosToPersonal(sharedId, urls, add){
+  var changed = false;
+  personal.forEach(function(p){
+    if(p.fromShared !== sharedId) return;
+    if(!Array.isArray(p.photos)) p.photos = [];
+    if(add){
+      urls.forEach(function(u){
+        if(p.photos.indexOf(u) < 0 && p.photos.length < PERSONAL_PHOTO_MAX){
+          p.photos.push(u); changed = true;
+        }
+      });
+    }else{
+      var before = p.photos.length;
+      p.photos = p.photos.filter(function(u){ return urls.indexOf(u) < 0; });
+      if(p.photos.length !== before) changed = true;
+    }
+  });
+  if(changed) saveLocal();
+  return changed;
+}
+
 function addSharedPhotos(s, urls){
   toast("反映中…");
   sbAppendPhotos(s.id, urls, photoToken(s.id), function(ok){
     if(!ok){ toast("追加できませんでした。ほかの人が先に埋めたかもしれません"); return; }
     rememberMyPhotos(urls);
+    syncPhotosToPersonal(s.id, urls, true);
     sbLoad(function(){
       renderMarkers(); renderList();
       toast("写真を追加しました");
@@ -2760,7 +2784,7 @@ document.getElementById("fSave").addEventListener("click", function(){
               id: uid(), created: Date.now(), fromShared: mine.id,
               name: name, works: w0, work: (w0[0]||""), addr: a0, memo: m0,
               visits: [today()], visited: true, date: today(),
-              lat: lat, lng: lng, photos: []
+              lat: lat, lng: lng, photos: (urls || []).slice(0, PERSONAL_PHOTO_MAX)
             });
             saveLocal();
             sbSetAdded(mine.id, true);
@@ -3008,7 +3032,7 @@ function renderList(){
             ? '<span class="b" style="background:#eaeef6;color:#1b2a49;">'+esc(s.author)+'</span>'
             : '');
       if(s.add_count > 0){
-        badge += '<span class="b" style="background:#f3f0e8;color:#8a7a4a;margin-left:5px;">👣 '+s.add_count+'</span>';
+        badge += '<span class="b" style="background:#f3f0e8;color:#8a7a4a;margin-left:5px;">'+s.add_count+'人が追加</span>';
       }
       subHtml = worksOf(s).length ? workLabelHtml(s) : esc(s.addr || "作品未設定");
     }else{
