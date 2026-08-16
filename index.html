@@ -81,14 +81,15 @@
     display:flex;align-items:center;gap:2px;background:var(--navy);color:#fff;border-radius:999px;
     padding:4px;box-shadow:0 3px 14px rgba(0,0,0,.22);max-width:calc(100% - 24px);
   }
-  #filterBarOpen{
-    color:#fff;padding:6px 4px 6px 8px;font-size:13px;font-weight:700;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:66vw;
+  .fbitem{
+    color:#fff;padding:6px 2px 6px 8px;font-size:13px;font-weight:700;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;
   }
-  #filterBarClear{
-    width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.2);
-    color:#fff;font-size:14px;flex:none;
+  .fbx{
+    width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.2);
+    color:#fff;font-size:13px;flex:none;margin-left:2px;
   }
+  .fbsep{width:1px;align-self:stretch;background:rgba(255,255,255,.25);margin:4px 6px;}
   .fbcat{background:rgba(255,255,255,.22);border-radius:5px;padding:1px 7px;margin-right:6px;font-size:.9em;}
   .fbn{font-weight:400;opacity:.75;margin-left:6px;font-size:.9em;}
   #listModeBar{margin-top:12px;box-shadow:none;background:#f1f1f4;}
@@ -325,6 +326,11 @@
   .badge.off{background:#f1f1f4;color:#8a8a95;}
   .badge.share{background:#eaeef6;color:var(--navy);}
   .badge.count{background:#f3f0e8;color:#8a7a4a;}
+  .newmark{
+    display:inline-block;background:var(--red);color:#fff;border-radius:5px;
+    padding:1px 6px;margin-right:6px;font-size:10px;font-weight:800;
+    letter-spacing:.04em;vertical-align:2px;
+  }
   .memo{white-space:pre-wrap;margin:14px 0 0;font-size:14px;color:#33333a;}
   .meta{margin-top:14px;font-size:12px;color:var(--sub);}
   .sheet-actions{display:flex;flex-wrap:wrap;gap:8px;padding:16px 18px 0;}
@@ -516,10 +522,7 @@
         <button data-m="personal">自分の記録</button>
       </div>
 
-      <div id="filterBar" style="display:none;">
-        <button id="filterBarOpen"><span id="filterBarText"></span></button>
-        <button id="filterBarClear" aria-label="しぼりこみを解除">×</button>
-      </div>
+      <div id="filterBar" style="display:none;"></div>
 
       <div id="crosshair">
         <div class="pin"><svg viewBox="0 0 32 42"><path d="M16 1.6c-7.1 0-12.9 5.8-12.9 12.9 0 3.5 1.6 7.4 4 11.2 2.4 3.8 5.4 7.3 7.6 9.6.7.8 1.9.8 2.6 0 2.2-2.3 5.2-5.8 7.6-9.6 2.4-3.8 4-7.7 4-11.2C28.9 7.4 23.1 1.6 16 1.6z" fill="#d7263d" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="14.5" r="5.2" fill="#fff"/></svg></div>
@@ -794,7 +797,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.047";
+var APP_VERSION = "1.048";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1015,11 +1018,19 @@ function allWorkNames(){
   });
   return Object.keys(m).sort(function(a,b){ return m[b]-m[a] || a.localeCompare(b,"ja"); });
 }
-function currentList(){
+/* 作品のしぼりこみまでを反映した一覧（達成率などはこちらを使う） */
+function baseList(){
   var l = rawList();
-  if(courseView) l = courseSpots();
-  else if(workFilter) l = l.filter(function(s){ return hasWork(s, workFilter); });
+  if(courseView) return courseSpots();
+  if(workFilter) l = l.filter(function(s){ return hasWork(s, workFilter); });
   return l;
+}
+/* 訪問状態のしぼりこみも反映した一覧。地図のピンもこれに従う */
+function currentList(){
+  var l = baseList();
+  if(courseView || MODE !== "personal" || filter === "all") return l;
+  if(filter === "visited") return l.filter(function(s){ return s.visited; });
+  return l.filter(function(s){ return !s.visited; });
 }
 
 /* ================= 保存まわり ================= */
@@ -1367,6 +1378,19 @@ function pinEl(kind){
 function sharedToken(id){ return myTokens[id] || adminKey || ""; }
 function canEditShared(id){ return !!(myTokens[id] || adminKey); }
 
+/* 前回このアプリを開いた時刻。これより後に登録されたものに NEW を付ける */
+var KEY_SEEN = "conan-seichi-lastseen";
+var prevSeen = Number(localStorage.getItem(KEY_SEEN) || 0);
+try{ localStorage.setItem(KEY_SEEN, String(Date.now())); }catch(e){}
+function isNew(row){
+  if(!prevSeen || !row || !row.created_at) return false;
+  var t = Date.parse(row.created_at);
+  return !isNaN(t) && t > prevSeen;
+}
+function newBadge(row){
+  return isNew(row) ? '<span class="newmark">NEW</span>' : '';
+}
+
 /* 端末ごとの合言葉。自分が入れた写真だけを消せるようにするために使う */
 var deviceToken = localStorage.getItem(KEY_DEVICE) || "";
 if(!deviceToken){
@@ -1673,7 +1697,8 @@ function openSheet(id){
     if(isShared) h += '<div class="photo-by" id="photoBy"></div>';
   }
   h += '<div class="sheet-pad">';
-  h += '<div class="sheet-title"><h2>'+esc(s.name)+'</h2><button class="closeX" id="sClose">×</button></div>';
+  h += '<div class="sheet-title"><h2>'+(isShared ? newBadge(s) : "")+esc(s.name)+'</h2>'
+     + '<button class="closeX" id="sClose">×</button></div>';
   if(worksOf(s).length) h += '<p class="work">'+workLabelHtml(s)+'</p>';
   if(s.addr) h += '<p class="work" style="font-size:12px;">📍 '+esc(s.addr)+'</p>';
 
@@ -2258,31 +2283,59 @@ function updateWorkBtn(){
   workBtn.innerHTML = "<span>" + esc(lbl) + "</span>";
   updateFilterBar();
 }
-/* 地図の上に、いましぼりこんでいる作品を出す */
+/* 地図の上に、いましぼりこんでいる条件を出す */
 function updateFilterBar(){
   var bar = document.getElementById("filterBar");
   if(!bar) return;
-  if(!workFilter || courseView || pickMode){ bar.style.display = "none"; return; }
-  var isCat = String(workFilter).indexOf("/") < 0;
-  var p = splitWork(workFilter);
-  var n = currentList().length;
-  document.getElementById("filterBarText").innerHTML =
-    '<span class="fbcat">' + esc(isCat ? workFilter : p.cat) + '</span>'
-    + (isCat ? "" : esc(p.title))
-    + '<b class="fbn">' + n + '件</b>';
+  var visitOn = (MODE === "personal" && filter !== "all");
+  if((!workFilter && !visitOn) || courseView || pickMode){ bar.style.display = "none"; return; }
+
+  var h = "";
+  if(workFilter){
+    var isCat = String(workFilter).indexOf("/") < 0;
+    var p = splitWork(workFilter);
+    h += '<button class="fbitem" data-open="work">'
+       + '<span class="fbcat">' + esc(isCat ? workFilter : p.cat) + '</span>'
+       + (isCat ? "" : esc(p.title)) + '</button>'
+       + '<button class="fbx" data-clear="work" aria-label="作品のしぼりこみを解除">×</button>';
+  }
+  if(visitOn){
+    if(workFilter) h += '<span class="fbsep"></span>';
+    h += '<button class="fbitem" data-open="visit">'
+       + (filter === "todo" ? "未訪問のみ" : "訪問済みのみ") + '</button>'
+       + '<button class="fbx" data-clear="visit" aria-label="訪問のしぼりこみを解除">×</button>';
+  }
+  h += '<b class="fbn">' + currentList().length + '件</b>';
+  bar.innerHTML = h;
   bar.style.display = "flex";
 }
-document.getElementById("filterBarOpen").addEventListener("click", function(){
-  workSheetCat = workFilter && String(workFilter).indexOf("/") >= 0 ? splitWork(workFilter).cat : null;
-  renderWorkSheet();
-  styleSheet.style.display = "none";
-  workSheet.style.display = "block";
-});
-document.getElementById("filterBarClear").addEventListener("click", function(){
-  workFilter = null;
-  updateWorkBtn();
-  renderMarkers(); renderList(); fitAll();
-  toast("すべての作品を表示します");
+document.getElementById("filterBar").addEventListener("click", function(e){
+  var o = e.target.closest("button[data-open]");
+  if(o){
+    if(o.dataset.open === "work"){
+      workSheetCat = workFilter && String(workFilter).indexOf("/") >= 0 ? splitWork(workFilter).cat : null;
+      renderWorkSheet();
+      styleSheet.style.display = "none";
+      workSheet.style.display = "block";
+    }else{
+      showPage("listPage");
+    }
+    return;
+  }
+  var c = e.target.closest("button[data-clear]");
+  if(!c) return;
+  if(c.dataset.clear === "work"){
+    workFilter = null; updateWorkBtn();
+    renderMarkers(); renderList(); fitAll();
+    toast("すべての作品を表示します");
+  }else{
+    filter = "all";
+    Array.prototype.forEach.call(document.querySelectorAll(".chip[data-f]"), function(x){
+      x.classList.toggle("on", x.dataset.f === "all");
+    });
+    renderMarkers(); renderList(); updateFilterBar();
+    toast("すべての記録を表示します");
+  }
 });
 function renderWorkSheet(){
   var tree = workTree();
@@ -2953,21 +3006,24 @@ var cardsEl = document.getElementById("cards");
 Array.prototype.forEach.call(document.querySelectorAll(".chip"), function(c){
   c.addEventListener("click", function(){
     Array.prototype.forEach.call(document.querySelectorAll(".chip"), function(x){ x.classList.remove("on"); });
-    c.classList.add("on"); filter = c.dataset.f; renderList();
+    c.classList.add("on"); filter = c.dataset.f;
+    renderMarkers(); renderList(); updateFilterBar();
   });
 });
 function renderList(){
   var statsEl = document.getElementById("stats");
   var arr;
 
-  var base = currentList();   // 作品のしぼりこみ・コース表示を反映した一覧
+  var base = baseList();      // 作品のしぼりこみ・コース表示を反映した一覧
 
   if(MODE === "shared"){
     var copied = base.filter(function(s){ return alreadyCopied(s.id); }).length;
+    var newN = base.filter(isNew).length;
     statsEl.innerHTML =
       '<div class="stat"><b>'+base.length+'</b><span>'+(workFilter ? 'この作品の聖地' : 'みんなの聖地')+'</span></div>'
-    + '<div class="stat"><b>'+copied+'</b><span>自分に追加済み</span></div>';
-    arr = base.slice();
+    + '<div class="stat"><b>'+copied+'</b><span>自分に追加済み</span></div>'
+    + (newN ? '<div class="stat"><b style="color:var(--red)">'+newN+'</b><span>前回から新着</span></div>' : '');
+    arr = currentList().slice();
   }else{
     var total = base.length;
     var vis = base.filter(function(s){ return s.visited; }).length;
@@ -2977,9 +3033,7 @@ function renderList(){
     + '<div class="stat"><b>'+total+'</b><span>'+(workFilter ? 'この作品の記録' : '記録した聖地')+'</span></div>'
     + '<div class="stat"><b>'+rate+'%</b><span>達成率</span></div>';
     document.getElementById("stBar").style.width = rate + "%";
-    arr = base.slice().sort(function(a,b){ return (b.created||0)-(a.created||0); });
-    if(filter==="visited") arr = arr.filter(function(s){ return s.visited; });
-    if(filter==="todo")    arr = arr.filter(function(s){ return !s.visited; });
+    arr = currentList().slice().sort(function(a,b){ return (b.created||0)-(a.created||0); });
   }
 
   var nearMode = (sortMode === "near" && myPos && !courseView);
@@ -3044,8 +3098,9 @@ function renderList(){
       subHtml = worksOf(s).length ? workLabelHtml(s) : esc(s.addr || "作品未設定");
     }
     var dist = nearMode ? '<div class="dist">'+esc(fmtDist(distM(myPos, s)))+'</div>' : '';
+    var nb = (MODE === "shared") ? newBadge(s) : "";
     return '<div class="card" data-id="'+esc(s.id)+'">'+th
-      + '<div class="info"><h4>'+esc(s.name)+'</h4><p>'+subHtml+'</p>'+badge+'</div>'+dist+'</div>';
+      + '<div class="info"><h4>'+nb+esc(s.name)+'</h4><p>'+subHtml+'</p>'+badge+'</div>'+dist+'</div>';
   }).join("");
 }
 /* みんなの聖地を、表示中のぶんだけまとめて自分の記録へ */
@@ -3143,7 +3198,7 @@ function renderCourseList(){
   el.innerHTML = courses.map(function(c){
     var names = (c.spot_ids||[]).map(function(id){ var s = spotById(id); return s ? s.name : null; }).filter(Boolean);
     return '<div class="course-card" data-cid="'+esc(c.id)+'">'
-      + '<h4>'+esc(c.title)+'</h4>'
+      + '<h4>'+newBadge(c)+esc(c.title)+'</h4>'
       + '<div class="cmeta">' + avatarHtml(c.author_id, c.author)
       + '<span>'+esc(displayName(c.author_id, c.author))+' ・ '+names.length+'か所 ・ '+esc(timeAgo(c.created_at))+'</span></div>'
       + totalTag(c) + courseTags(c)
