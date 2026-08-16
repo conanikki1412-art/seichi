@@ -490,6 +490,30 @@
   #nav button.on{color:var(--navy);}
   #nav svg{width:22px;height:22px;}
 
+  /* 写真の全画面表示 */
+  #lightbox{position:fixed;inset:0;z-index:2000;background:#000;display:none;}
+  #lbTrack{
+    display:flex;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  #lbTrack::-webkit-scrollbar{display:none;}
+  .lbitem{
+    flex:0 0 100%;height:100%;display:flex;align-items:center;justify-content:center;
+    scroll-snap-align:center;overflow:hidden;
+  }
+  .lbitem img{
+    max-width:100%;max-height:100%;object-fit:contain;display:block;
+    transform-origin:center center;touch-action:none;will-change:transform;
+  }
+  #lbClose{
+    position:absolute;top:calc(10px + var(--safe-t));right:12px;width:40px;height:40px;
+    border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:20px;z-index:2;
+  }
+  #lbCount{
+    position:absolute;top:calc(20px + var(--safe-t));left:18px;color:#fff;
+    font-size:13px;font-weight:700;z-index:2;text-shadow:0 1px 3px rgba(0,0,0,.6);
+  }
+
   .toast{
     position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--safe-b) + 18px);transform:translateX(-50%);
     background:rgba(20,20,25,.92);color:#fff;padding:11px 20px;border-radius:999px;font-size:13px;
@@ -783,6 +807,12 @@
   </div>
 </div>
 
+<div id="lightbox">
+  <div id="lbTrack"></div>
+  <div id="lbCount"></div>
+  <button id="lbClose" aria-label="閉じる">×</button>
+</div>
+
 <input type="file" id="importInput" accept="application/json,.json" hidden>
 <input type="file" id="sharedPhotoInput" accept="image/*" multiple hidden>
 <input type="file" id="avatarInput" accept="image/*" hidden>
@@ -797,7 +827,7 @@
    Supabase の Settings → API から値をコピーして下の2行に貼り付け
    ============================================================ */
 /* 更新のたびにこの番号を上げると、端末が古い版を掴んでいても自動で読み直します */
-var APP_VERSION = "1.048";
+var APP_VERSION = "1.049";
 
 var SUPABASE_URL      = "https://nmokjvorgknrpmxsyxct.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_Njo2b4lQrTAtTHwQv23EnA_xqoAh7LR";
@@ -1684,7 +1714,7 @@ function openSheet(id){
   if(photos.length){
     h += '<div class="gal-wrap"><div class="gallery" id="gal">'
        + photos.map(function(p,i){
-           return '<img src="'+esc(p)+'" alt=""'+(i ? ' loading="lazy"' : '')+'>';
+           return '<img src="'+esc(p)+'" alt="" data-lb="'+i+'"'+(i ? ' loading="lazy"' : '')+'>';
          }).join("")
        + '</div>'
        + (photos.length>1 ? '<div class="gal-count" id="galCount">1 / '+photos.length+'</div>' : '')
@@ -1743,7 +1773,7 @@ function openSheet(id){
       h += '<div class="thumbs">';
       photos.forEach(function(p,i){
         if(!canDeletePhoto(s.id, p)) return;
-        h += '<div class="ph-wrap"><img src="'+esc(p)+'" alt=""><button data-ph="'+i+'">×</button></div>';
+        h += '<div class="ph-wrap"><img src="'+esc(p)+'" alt="" data-lb="'+i+'"><button data-ph="'+i+'">×</button></div>';
       });
       if(hasRoom){
         h += '<button class="photo-add" id="sAddPhoto"><span style="font-size:20px;">＋</span>写真</button>';
@@ -1796,7 +1826,16 @@ function openSheet(id){
   sheetMask.style.opacity = "";
   document.getElementById("sClose").onclick = closeSheet;
 
-  // 写真ギャラリーのページ表示
+  // 写真をタップしたら全画面で見る
+  var galEl = document.getElementById("gal");
+  if(galEl){
+    galEl.addEventListener("click", function(e){
+      var im = e.target.closest("img[data-lb]");
+      if(!im) return;
+      openLightbox(photos, +im.dataset.lb);
+    });
+  }
+
   // 写真を入れた人の表示
   if(isShared && photos.length){
     photoOwnerMap = {};
@@ -1838,6 +1877,9 @@ function openSheet(id){
   // 共有ピンの写真を追加・削除
   var addPh = document.getElementById("sAddPhoto");
   if(addPh) addPh.onclick = function(){ photoTarget = s; sharedPhotoInput.click(); };
+  Array.prototype.forEach.call(sheetBody.querySelectorAll(".thumbs img[data-lb]"), function(im){
+    im.onclick = function(){ openLightbox(photos, +im.dataset.lb); };
+  });
   Array.prototype.forEach.call(sheetBody.querySelectorAll("button[data-ph]"), function(b){
     b.onclick = function(){
       var url = photos[+b.dataset.ph];
@@ -1903,6 +1945,108 @@ function openSheet(id){
 
   if(document.getElementById("mapPage").classList.contains("active")) flyTo(s.lat, s.lng, 15);
 }
+
+/* ---------------- 写真の全画面表示 ---------------- */
+var lb = document.getElementById("lightbox");
+var lbTrack = document.getElementById("lbTrack");
+var lbCount = document.getElementById("lbCount");
+var lbPhotos = [];
+var lbScale = 1, lbTx = 0, lbTy = 0;
+
+function lbCurImg(){
+  var w = lbTrack.clientWidth || 1;
+  var i = Math.round(lbTrack.scrollLeft / w);
+  var item = lbTrack.children[i];
+  return item ? item.querySelector("img") : null;
+}
+function lbApply(){
+  var img = lbCurImg();
+  if(img) img.style.transform = "translate("+lbTx+"px,"+lbTy+"px) scale("+lbScale+")";
+  lbTrack.style.overflowX = lbScale > 1 ? "hidden" : "auto";
+}
+function lbReset(){
+  var img = lbCurImg();
+  lbScale = 1; lbTx = 0; lbTy = 0;
+  if(img) img.style.transform = "";
+  lbTrack.style.overflowX = "auto";
+}
+function openLightbox(photos, index){
+  lbPhotos = photos || [];
+  if(!lbPhotos.length) return;
+  lbTrack.innerHTML = lbPhotos.map(function(u){
+    return '<div class="lbitem"><img src="'+esc(u)+'" alt=""></div>';
+  }).join("");
+  lb.style.display = "block";
+  lbScale = 1; lbTx = 0; lbTy = 0;
+  lbTrack.style.overflowX = "auto";
+  setTimeout(function(){
+    lbTrack.scrollLeft = (index || 0) * lbTrack.clientWidth;
+    lbUpdateCount();
+  }, 10);
+}
+function closeLightbox(){
+  lb.style.display = "none";
+  lbTrack.innerHTML = "";
+  lbPhotos = [];
+}
+function lbUpdateCount(){
+  lbCount.textContent = lbPhotos.length > 1
+    ? (Math.round(lbTrack.scrollLeft / (lbTrack.clientWidth||1)) + 1) + " / " + lbPhotos.length
+    : "";
+}
+document.getElementById("lbClose").addEventListener("click", closeLightbox);
+lbTrack.addEventListener("scroll", function(){
+  lbUpdateCount();
+  if(lbScale !== 1) lbReset();
+}, { passive:true });
+
+(function(){
+  var startDist = 0, startScale = 1, panning = false, sx = 0, sy = 0, stx = 0, sty = 0;
+  var lastTap = 0;
+  function dist(t){
+    var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+  lbTrack.addEventListener("touchstart", function(e){
+    if(e.touches.length === 2){
+      startDist = dist(e.touches); startScale = lbScale;
+      if(e.cancelable) e.preventDefault();
+    }else if(e.touches.length === 1 && lbScale > 1){
+      panning = true;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+      stx = lbTx; sty = lbTy;
+    }
+  }, { passive:false });
+  lbTrack.addEventListener("touchmove", function(e){
+    if(e.touches.length === 2 && startDist){
+      var r = dist(e.touches) / startDist;
+      lbScale = Math.min(5, Math.max(1, startScale * r));
+      if(lbScale === 1){ lbTx = 0; lbTy = 0; }
+      lbApply();
+      if(e.cancelable) e.preventDefault();
+    }else if(panning && e.touches.length === 1){
+      lbTx = stx + (e.touches[0].clientX - sx);
+      lbTy = sty + (e.touches[0].clientY - sy);
+      lbApply();
+      if(e.cancelable) e.preventDefault();
+    }
+  }, { passive:false });
+  lbTrack.addEventListener("touchend", function(e){
+    if(e.touches.length === 0){
+      startDist = 0; panning = false;
+      if(lbScale <= 1.02) lbReset();
+      // ダブルタップで拡大・戻す
+      var now = Date.now();
+      if(now - lastTap < 300){
+        if(lbScale > 1){ lbReset(); }
+        else{ lbScale = 2.5; lbTx = 0; lbTy = 0; lbApply(); }
+        lastTap = 0;
+      }else{
+        lastTap = now;
+      }
+    }
+  });
+})();
 
 /* ---------------- 写真を入れた人 ---------------- */
 var photoOwnerMap = {}, photoIndex = 0;
